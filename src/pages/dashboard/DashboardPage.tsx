@@ -1,16 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Typography,
-    Grid,
     Paper,
     Box,
     Card,
     CardContent,
     CardActionArea,
     useTheme,
+    Alert,
+    CircularProgress,
+    Stack,
 } from '@mui/material';
 import {
-    Dashboard,
     People,
     Schedule,
     Note,
@@ -20,11 +21,28 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PageLayout from '../../components/Layout/PageLayout';
+import { clientService } from '../../services/clientService';
+import { rosterService } from '../../services/rosterService';
+
+interface DashboardStats {
+    activeClients: number;
+    todayShifts: number;
+    completedShifts: number;
+    pendingNotes: number;
+}
 
 const DashboardPage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const theme = useTheme();
+    const [stats, setStats] = useState<DashboardStats>({
+        activeClients: 0,
+        todayShifts: 0,
+        completedShifts: 0,
+        pendingNotes: 0,
+    });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const dashboardCards = [
         {
@@ -69,6 +87,61 @@ const DashboardPage: React.FC = () => {
         },
     ];
 
+    useEffect(() => {
+        if (user) {
+            loadDashboardStats();
+        }
+    }, [user]);
+
+    const loadDashboardStats = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            // Load real stats from APIs
+            const [clientsData, shiftsData] = await Promise.allSettled([
+                clientService.getClients(),
+                rosterService.getShifts(),
+            ]);
+
+            const clients = clientsData.status === 'fulfilled' ? clientsData.value : { results: [] };
+            const shifts = shiftsData.status === 'fulfilled' ? shiftsData.value : { results: [] };
+
+            const clientList = clients.results || clients || [];
+            const shiftList = shifts.results || shifts || [];
+
+            // Calculate today's date
+            const today = new Date();
+            const todayString = today.toISOString().split('T')[0];
+
+            // Calculate stats
+            const activeClients = clientList.filter((client: any) => client.is_active).length;
+            const todayShifts = shiftList.filter((shift: any) => {
+                const shiftDate = new Date(shift.start_datetime).toISOString().split('T')[0];
+                return shiftDate === todayString;
+            }).length;
+            const completedShifts = shiftList.filter((shift: any) => shift.status === 'completed').length;
+
+            setStats({
+                activeClients,
+                todayShifts,
+                completedShifts,
+                pendingNotes: 0, // Will be updated when notes API is implemented
+            });
+        } catch (err: any) {
+            console.error('Error loading dashboard stats:', err);
+            // Don't show error for stats - just use default values
+            setStats({
+                activeClients: 0,
+                todayShifts: 0,
+                completedShifts: 0,
+                pendingNotes: 0,
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const filteredCards = dashboardCards.filter(card =>
         !user || card.roles.includes(user.user_type)
     );
@@ -80,103 +153,246 @@ const DashboardPage: React.FC = () => {
         return 'Good Evening';
     };
 
+    if (!user) {
+        return (
+            <PageLayout>
+                <Alert severity="warning">
+                    Please log in to view the dashboard.
+                </Alert>
+            </PageLayout>
+        );
+    }
+
     return (
         <PageLayout>
-            <Box sx={{ mb: 4 }}>
-                <Typography variant="h3" component="h1" gutterBottom>
-                    {getGreeting()}{user ? `, ${user.first_name}` : ''}
-                </Typography>
-                <Typography variant="h6" color="text.secondary">
-                    Welcome to CareManagement System
-                </Typography>
-            </Box>
+            <Stack spacing={4}>
+                {error && (
+                    <Alert severity="error" onClose={() => setError(null)}>
+                        {error}
+                    </Alert>
+                )}
 
-            {/* Quick Stats */}
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h4" color="primary">
-                            0
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Active Clients
-                        </Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h4" color="secondary">
-                            0
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Today's Shifts
-                        </Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h4" color="success.main">
-                            0
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Completed Shifts
-                        </Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
-                        <Typography variant="h4" color="warning.main">
-                            0
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Pending Notes
-                        </Typography>
-                    </Paper>
-                </Grid>
-            </Grid>
+                {/* Header Section */}
+                <Box>
+                    <Typography variant="h3" component="h1" gutterBottom>
+                        {getGreeting()}, {user.first_name || user.username}
+                    </Typography>
+                    <Typography variant="h6" color="text.secondary">
+                        Welcome to CareManagement System
+                    </Typography>
+                </Box>
 
-            {/* Quick Actions */}
-            <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 3 }}>
-                Quick Actions
-            </Typography>
-            <Grid container spacing={3}>
-                {filteredCards.map((card) => (
-                    <Grid item xs={12} sm={6} md={4} key={card.title}>
-                        <Card
-                            sx={{
-                                height: '100%',
-                                transition: 'transform 0.2s ease-in-out',
-                                '&:hover': {
-                                    transform: 'translateY(-4px)',
-                                    boxShadow: 4,
-                                },
-                            }}
-                        >
-                            <CardActionArea
-                                onClick={() => navigate(card.path)}
-                                sx={{ height: '100%', p: 2 }}
+                {/* Quick Stats */}
+                <Box>
+                    <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 2 }}>
+                        Overview
+                    </Typography>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 2,
+                            justifyContent: 'space-between',
+                        }}
+                    >
+                        {/* Active Clients */}
+                        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
+                            <Paper
+                                sx={{
+                                    p: 3,
+                                    textAlign: 'center',
+                                    transition: 'transform 0.2s ease-in-out',
+                                    '&:hover': {
+                                        transform: 'translateY(-2px)',
+                                        boxShadow: 3,
+                                    },
+                                    height: '100%',
+                                }}
                             >
-                                <CardContent sx={{ textAlign: 'center' }}>
-                                    <Box
-                                        sx={{
-                                            color: card.color,
-                                            mb: 2,
-                                        }}
+                                {loading ? (
+                                    <CircularProgress size={24} />
+                                ) : (
+                                    <Stack spacing={1} alignItems="center">
+                                        <Typography variant="h3" color="primary">
+                                            {stats.activeClients}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Active Clients
+                                        </Typography>
+                                    </Stack>
+                                )}
+                            </Paper>
+                        </Box>
+
+                        {/* Today's Shifts */}
+                        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
+                            <Paper
+                                sx={{
+                                    p: 3,
+                                    textAlign: 'center',
+                                    transition: 'transform 0.2s ease-in-out',
+                                    '&:hover': {
+                                        transform: 'translateY(-2px)',
+                                        boxShadow: 3,
+                                    },
+                                    height: '100%',
+                                }}
+                            >
+                                {loading ? (
+                                    <CircularProgress size={24} />
+                                ) : (
+                                    <Stack spacing={1} alignItems="center">
+                                        <Typography variant="h3" color="secondary">
+                                            {stats.todayShifts}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Today's Shifts
+                                        </Typography>
+                                    </Stack>
+                                )}
+                            </Paper>
+                        </Box>
+
+                        {/* Completed Shifts */}
+                        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
+                            <Paper
+                                sx={{
+                                    p: 3,
+                                    textAlign: 'center',
+                                    transition: 'transform 0.2s ease-in-out',
+                                    '&:hover': {
+                                        transform: 'translateY(-2px)',
+                                        boxShadow: 3,
+                                    },
+                                    height: '100%',
+                                }}
+                            >
+                                {loading ? (
+                                    <CircularProgress size={24} />
+                                ) : (
+                                    <Stack spacing={1} alignItems="center">
+                                        <Typography variant="h3" color="success.main">
+                                            {stats.completedShifts}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Completed Shifts
+                                        </Typography>
+                                    </Stack>
+                                )}
+                            </Paper>
+                        </Box>
+
+                        {/* Pending Notes */}
+                        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 22%' } }}>
+                            <Paper
+                                sx={{
+                                    p: 3,
+                                    textAlign: 'center',
+                                    transition: 'transform 0.2s ease-in-out',
+                                    '&:hover': {
+                                        transform: 'translateY(-2px)',
+                                        boxShadow: 3,
+                                    },
+                                    height: '100%',
+                                }}
+                            >
+                                {loading ? (
+                                    <CircularProgress size={24} />
+                                ) : (
+                                    <Stack spacing={1} alignItems="center">
+                                        <Typography variant="h3" color="warning.main">
+                                            {stats.pendingNotes}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Pending Notes
+                                        </Typography>
+                                    </Stack>
+                                )}
+                            </Paper>
+                        </Box>
+                    </Box>
+                </Box>
+
+                {/* Quick Actions */}
+                <Box>
+                    <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 2 }}>
+                        Quick Actions
+                    </Typography>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 3,
+                            justifyContent: 'flex-start',
+                        }}
+                    >
+                        {filteredCards.map((card) => (
+                            <Box
+                                key={card.title}
+                                sx={{
+                                    flex: { xs: '1 1 100%', sm: '1 1 45%', md: '1 1 30%' },
+                                    minWidth: 280,
+                                }}
+                            >
+                                <Card
+                                    sx={{
+                                        height: '100%',
+                                        transition: 'transform 0.2s ease-in-out',
+                                        '&:hover': {
+                                            transform: 'translateY(-4px)',
+                                            boxShadow: 4,
+                                        },
+                                    }}
+                                >
+                                    <CardActionArea
+                                        onClick={() => navigate(card.path)}
+                                        sx={{ height: '100%', p: 3 }}
                                     >
-                                        {card.icon}
-                                    </Box>
-                                    <Typography variant="h6" component="h3" gutterBottom>
-                                        {card.title}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        {card.description}
-                                    </Typography>
-                                </CardContent>
-                            </CardActionArea>
-                        </Card>
-                    </Grid>
-                ))}
-            </Grid>
+                                        <CardContent sx={{ textAlign: 'center', p: 0 }}>
+                                            <Stack spacing={2} alignItems="center">
+                                                <Box
+                                                    sx={{
+                                                        color: card.color,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                    }}
+                                                >
+                                                    {card.icon}
+                                                </Box>
+                                                <Typography variant="h6" component="h3">
+                                                    {card.title}
+                                                </Typography>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    {card.description}
+                                                </Typography>
+                                            </Stack>
+                                        </CardContent>
+                                    </CardActionArea>
+                                </Card>
+                            </Box>
+                        ))}
+                    </Box>
+                </Box>
+
+                {/* Recent Activity Section */}
+                <Box>
+                    <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 2 }}>
+                        Recent Activity
+                    </Typography>
+                    <Paper sx={{ p: 4 }}>
+                        <Stack spacing={2} alignItems="center">
+                            <Typography variant="h6" color="text.secondary">
+                                No Recent Activity
+                            </Typography>
+                            <Typography variant="body1" color="text.secondary" textAlign="center">
+                                Recent activity will appear here once you start using the system.
+                                Try adding clients, creating shifts, or recording notes to see updates.
+                            </Typography>
+                        </Stack>
+                    </Paper>
+                </Box>
+            </Stack>
         </PageLayout>
     );
 };
