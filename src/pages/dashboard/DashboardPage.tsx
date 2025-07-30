@@ -10,6 +10,7 @@ import {
     Alert,
     CircularProgress,
     Stack,
+    Button,
 } from '@mui/material';
 import {
     People,
@@ -17,12 +18,15 @@ import {
     Note,
     Receipt,
     TrendingUp,
+    SupervisorAccount as SupervisorAccountIcon,
+    ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PageLayout from '../../components/Layout/PageLayout';
 import { clientService } from '../../services/clientService';
 import { rosterService } from '../../services/rosterService';
+import { staffService } from '../../services/staffService';
 
 interface DashboardStats {
     activeClients: number;
@@ -43,6 +47,11 @@ const DashboardPage: React.FC = () => {
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [staffStats, setStaffStats] = useState<any>({
+        total_staff: 0,
+    });
+
+    const isAdmin = user && user.user_type === 'admin';
 
     const dashboardCards = [
         {
@@ -141,6 +150,31 @@ const DashboardPage: React.FC = () => {
             setLoading(false);
         }
     };
+
+    const loadStaffStats = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            // Load staff stats from API
+            const staffData = await staffService.getStaffStats();
+
+            setStaffStats(staffData);
+        } catch (err: any) {
+            console.error('Error loading staff stats:', err);
+            setStaffStats({
+                total_staff: 0,
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isAdmin) {
+            loadStaffStats();
+        }
+    }, [isAdmin]);
 
     const filteredCards = dashboardCards.filter(card =>
         !user || card.roles.includes(user.user_type)
@@ -312,6 +346,31 @@ const DashboardPage: React.FC = () => {
                         </Box>
                     </Box>
                 </Box>
+
+                {/* Staff Management Card - Admin Only */}
+                {isAdmin && (
+                    <Card>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom>
+                                <SupervisorAccountIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                                Staff Management
+                            </Typography>
+                            <Stack spacing={1}>
+                                <Typography variant="h4">{staffStats.total_staff || 0}</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Total Staff Members
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    onClick={() => navigate('/staff')}
+                                    startIcon={<ArrowForwardIcon />}
+                                >
+                                    Manage Staff
+                                </Button>
+                            </Stack>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Quick Actions */}
                 <Box>

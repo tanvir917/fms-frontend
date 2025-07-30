@@ -28,6 +28,7 @@ import {
     Receipt,
     AccountCircle,
     Logout,
+    SupervisorAccount as SupervisorAccountIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -93,6 +94,17 @@ const Navbar: React.FC = () => {
                         </ListItemButton>
                     </ListItem>
                 ))}
+
+                {user && (user.user_type == "Administrator") && (
+                    <ListItem disablePadding>
+                        <ListItemButton onClick={() => navigate('/staff')}>
+                            <ListItemIcon>
+                                <SupervisorAccountIcon />
+                            </ListItemIcon>
+                            <ListItemText primary="Staff Management" />
+                        </ListItemButton>
+                    </ListItem>
+                )}
             </List>
         </div>
     );

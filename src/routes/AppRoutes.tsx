@@ -15,6 +15,7 @@ import NotesPage from '../pages/notes/NotesPage';
 import BillingPage from '../pages/billing/BillingPage';
 import ProfilePage from '../pages/profile/ProfilePage';
 import ApiDebug from '../components/Debug/ApiDebug';
+import StaffDetailPage from '../pages/staff/StaffDetailPage';
 
 // Protected Route wrapper
 interface ProtectedRouteProps {
@@ -116,6 +117,7 @@ const AppRoutes: React.FC = () => {
                     </ProtectedRoute>
                 }
             />
+            <Route path="/staff/:id" element={<StaffDetailPage />} />
             <Route
                 path="/roster"
                 element={
