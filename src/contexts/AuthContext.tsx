@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import axios from 'axios';
+import api from '../services/api'; // Use the centralized API instance
 
 // Types
 interface User {
@@ -45,61 +45,6 @@ interface AuthResponse {
 // Create context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// API base URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-
-// Axios instance
-const apiClient = axios.create({
-    baseURL: API_BASE_URL,
-});
-
-// Add request interceptor to include auth token
-apiClient.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => Promise.reject(error)
-);
-
-// Add response interceptor to handle token refresh
-apiClient.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
-
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
-
-            const refreshToken = localStorage.getItem('refreshToken');
-            if (refreshToken) {
-                try {
-                    const response = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
-                        refresh: refreshToken,
-                    });
-
-                    const { access } = response.data;
-                    localStorage.setItem('accessToken', access);
-
-                    return apiClient(originalRequest);
-                } catch (refreshError) {
-                    // Refresh failed, logout user - but don't redirect here
-                    localStorage.removeItem('accessToken');
-                    localStorage.removeItem('refreshToken');
-                    localStorage.removeItem('user');
-                    // Let the ProtectedRoute component handle the redirect
-                    return Promise.reject(refreshError);
-                }
-            }
-        }
-
-        return Promise.reject(error);
-    }
-);
-
 // Provider component
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
@@ -125,7 +70,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const login = async (username: string, password: string): Promise<void> => {
         try {
-            const response = await apiClient.post<AuthResponse>('/auth/login/', {
+            const response = await api.post<AuthResponse>('/auth/login/', {
                 username,
                 password,
             });
@@ -139,19 +84,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             setUser(userData);
         } catch (error: any) {
-            if (error.response?.data?.non_field_errors) {
-                throw new Error(error.response.data.non_field_errors[0]);
-            } else if (error.response?.data?.message) {
-                throw new Error(error.response.data.message);
-            } else {
-                throw new Error('Login failed. Please check your credentials.');
-            }
+            console.error('Login error:', error);
+            throw new Error(error.response?.data?.message || 'Login failed');
         }
     };
 
     const register = async (userData: RegisterData): Promise<void> => {
         try {
-            const response = await apiClient.post<AuthResponse>('/auth/register/', userData);
+            const response = await api.post<AuthResponse>('/auth/register/', userData);
 
             const { user: newUser, tokens } = response.data;
 
@@ -162,14 +102,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             setUser(newUser);
         } catch (error: any) {
-            if (error.response?.data) {
-                // Handle validation errors
-                const errors = error.response.data;
-                const errorMessages = Object.values(errors).flat() as string[];
-                throw new Error(errorMessages.join(', '));
-            } else {
-                throw new Error('Registration failed. Please try again.');
-            }
+            console.error('Registration error:', error);
+            throw new Error(error.response?.data?.message || 'Registration failed');
         }
     };
 
@@ -177,13 +111,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const refreshToken = localStorage.getItem('refreshToken');
             if (refreshToken) {
-                await apiClient.post('/auth/logout/', { refresh: refreshToken });
+                await api.post('/auth/logout/', { refresh: refreshToken });
             }
         } catch (error) {
-            // Ignore logout API errors
-            console.error('Logout API error:', error);
+            console.error('Logout error:', error);
         } finally {
-            // Always clear local storage and state
+            // Clear local storage and state regardless of API call success
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
             localStorage.removeItem('user');
@@ -193,39 +126,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const updateProfile = async (profileData: Partial<User>): Promise<void> => {
         try {
-            const response = await apiClient.patch<User>('/auth/profile/', profileData);
-
+            const response = await api.patch<User>('/auth/profile/', profileData);
             const updatedUser = response.data;
-            localStorage.setItem('user', JSON.stringify(updatedUser));
+
             setUser(updatedUser);
+            localStorage.setItem('user', JSON.stringify(updatedUser));
         } catch (error: any) {
-            if (error.response?.data) {
-                const errors = error.response.data;
-                const errorMessages = Object.values(errors).flat() as string[];
-                throw new Error(errorMessages.join(', '));
-            } else {
-                throw new Error('Profile update failed. Please try again.');
-            }
+            console.error('Profile update error:', error);
+            throw new Error(error.response?.data?.message || 'Profile update failed');
         }
     };
 
-    const contextValue: AuthContextType = {
+    const value: AuthContextType = {
         user,
-        loading,
         login,
-        logout,
         register,
+        logout,
         updateProfile,
+        loading
     };
 
     return (
-        <AuthContext.Provider value={contextValue}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );
 };
 
-// Custom hook to use auth context
 export const useAuth = (): AuthContextType => {
     const context = useContext(AuthContext);
     if (context === undefined) {
@@ -234,5 +161,5 @@ export const useAuth = (): AuthContextType => {
     return context;
 };
 
-// Export API client for use in other components
-export { apiClient };
+// Export the centralized API instance instead of local one
+export { api };
