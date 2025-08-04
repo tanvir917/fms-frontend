@@ -34,7 +34,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
-import { rosterService, Shift, ShiftSwap } from '../../services/rosterService';
+import { rosterService, Shift, ShiftSwap, DropdownOption } from '../../services/rosterService';
 import { useAuth } from '../../contexts/AuthContext';
 import PageLayout from '../../components/Layout/PageLayout';
 
@@ -64,8 +64,11 @@ const RosterPage: React.FC = () => {
     const [tabValue, setTabValue] = useState(0);
     const [shifts, setShifts] = useState<Shift[]>([]);
     const [shiftSwaps, setShiftSwaps] = useState<ShiftSwap[]>([]);
+    const [clients, setClients] = useState<DropdownOption[]>([]);
+    const [staff, setStaff] = useState<DropdownOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [swapsLoading, setSwapsLoading] = useState(true);
+    const [dropdownLoading, setDropdownLoading] = useState(false);
     const [openShiftDialog, setOpenShiftDialog] = useState(false);
     const [openSwapDialog, setOpenSwapDialog] = useState(false);
     const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
@@ -79,6 +82,7 @@ const RosterPage: React.FC = () => {
         if (user) {
             loadShifts();
             loadShiftSwaps();
+            loadDropdownData();
         }
     }, [user]);
 
@@ -112,6 +116,23 @@ const RosterPage: React.FC = () => {
         }
     };
 
+    const loadDropdownData = async () => {
+        try {
+            setDropdownLoading(true);
+            const [clientsData, staffData] = await Promise.all([
+                rosterService.getClientsDropdown(),
+                rosterService.getStaffDropdown()
+            ]);
+            setClients(clientsData);
+            setStaff(staffData);
+        } catch (err: any) {
+            console.error('Error loading dropdown data:', err);
+            setError('Failed to load dropdown data');
+        } finally {
+            setDropdownLoading(false);
+        }
+    };
+
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
     };
@@ -137,7 +158,7 @@ const RosterPage: React.FC = () => {
 
     const handleSaveShift = async () => {
         try {
-            if (selectedShift) {
+            if (selectedShift && selectedShift.id !== undefined) {
                 await rosterService.updateShift(selectedShift.id, shiftFormData);
                 setSuccess('Shift updated successfully');
             } else {
@@ -507,22 +528,44 @@ const RosterPage: React.FC = () => {
                     <DialogContent>
                         <Stack spacing={3} sx={{ mt: 2 }}>
                             <Box sx={{ display: 'flex', gap: 2 }}>
-                                <TextField
-                                    label="Client ID"
-                                    type="number"
-                                    fullWidth
-                                    required
-                                    value={shiftFormData.client || ''}
-                                    onChange={(e) => handleShiftInputChange('client', parseInt(e.target.value))}
-                                />
-                                <TextField
-                                    label="Staff ID"
-                                    type="number"
-                                    fullWidth
-                                    required
-                                    value={shiftFormData.staff || ''}
-                                    onChange={(e) => handleShiftInputChange('staff', parseInt(e.target.value))}
-                                />
+                                <FormControl fullWidth required>
+                                    <InputLabel>Client</InputLabel>
+                                    <Select
+                                        value={shiftFormData.client || ''}
+                                        onChange={(e) => handleShiftInputChange('client', e.target.value)}
+                                        disabled={dropdownLoading}
+                                    >
+                                        {clients.map((client) => (
+                                            <MenuItem key={client.id} value={client.id}>
+                                                {client.display_name}
+                                                {client.address_line_1 && (
+                                                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                                        {client.address_line_1}, {client.city}
+                                                    </Typography>
+                                                )}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                                <FormControl fullWidth required>
+                                    <InputLabel>Staff</InputLabel>
+                                    <Select
+                                        value={shiftFormData.staff || ''}
+                                        onChange={(e) => handleShiftInputChange('staff', e.target.value)}
+                                        disabled={dropdownLoading}
+                                    >
+                                        {staff.filter(s => s.is_active).map((staffMember) => (
+                                            <MenuItem key={staffMember.id} value={staffMember.id}>
+                                                {staffMember.display_name}
+                                                {staffMember.employee_id && (
+                                                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                                        ID: {staffMember.employee_id} | {staffMember.position}
+                                                    </Typography>
+                                                )}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
                             </Box>
                             <Box sx={{ display: 'flex', gap: 2 }}>
                                 <FormControl fullWidth>
@@ -612,29 +655,59 @@ const RosterPage: React.FC = () => {
                     <DialogTitle>Request Shift Swap</DialogTitle>
                     <DialogContent>
                         <Stack spacing={3} sx={{ mt: 2 }}>
-                            <TextField
-                                label="Original Shift ID"
-                                type="number"
-                                fullWidth
-                                required
-                                value={swapFormData.original_shift || ''}
-                                onChange={(e) => handleSwapInputChange('original_shift', parseInt(e.target.value))}
-                            />
-                            <TextField
-                                label="Requesting Staff ID"
-                                type="number"
-                                fullWidth
-                                required
-                                value={swapFormData.requesting_staff || ''}
-                                onChange={(e) => handleSwapInputChange('requesting_staff', parseInt(e.target.value))}
-                            />
-                            <TextField
-                                label="Target Staff ID (Optional)"
-                                type="number"
-                                fullWidth
-                                value={swapFormData.target_staff || ''}
-                                onChange={(e) => handleSwapInputChange('target_staff', e.target.value ? parseInt(e.target.value) : undefined)}
-                            />
+                            <FormControl fullWidth required>
+                                <InputLabel>Original Shift</InputLabel>
+                                <Select
+                                    value={swapFormData.original_shift || ''}
+                                    onChange={(e) => handleSwapInputChange('original_shift', e.target.value)}
+                                >
+                                    {shifts.map((shift) => (
+                                        <MenuItem key={shift.id} value={shift.id}>
+                                            Shift #{shift.id} - {shift.client_name}
+                                            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                                {new Date(shift.start_datetime).toLocaleString()}
+                                            </Typography>
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                            <FormControl fullWidth required>
+                                <InputLabel>Requesting Staff</InputLabel>
+                                <Select
+                                    value={swapFormData.requesting_staff || ''}
+                                    onChange={(e) => handleSwapInputChange('requesting_staff', e.target.value)}
+                                >
+                                    {staff.filter(s => s.is_active).map((staffMember) => (
+                                        <MenuItem key={staffMember.id} value={staffMember.id}>
+                                            {staffMember.display_name}
+                                            {staffMember.employee_id && (
+                                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                                    ID: {staffMember.employee_id}
+                                                </Typography>
+                                            )}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                            <FormControl fullWidth>
+                                <InputLabel>Target Staff (Optional)</InputLabel>
+                                <Select
+                                    value={swapFormData.target_staff || ''}
+                                    onChange={(e) => handleSwapInputChange('target_staff', e.target.value || undefined)}
+                                >
+                                    <MenuItem value="">Any Staff</MenuItem>
+                                    {staff.filter(s => s.is_active).map((staffMember) => (
+                                        <MenuItem key={staffMember.id} value={staffMember.id}>
+                                            {staffMember.display_name}
+                                            {staffMember.employee_id && (
+                                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                                    ID: {staffMember.employee_id}
+                                                </Typography>
+                                            )}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
                             <TextField
                                 label="Reason for Swap"
                                 fullWidth
