@@ -64,7 +64,7 @@ const StaffDetailPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
-    const isAdmin = user?.user_type === "admin" ||
+    const isAdmin = user?.user_type === "Admin" ||
         user?.user_type === "Administrator" ||
         user?.user_type === "manager" ||
         user?.user_type === "Manager";

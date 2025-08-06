@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider } from './contexts/AuthContext';
 import AppRoutes from './routes/AppRoutes';
 import Navbar from './components/Layout/Navbar';
+import AuthDebug from './components/Debug/AuthDebug';
 import './App.css';
 
 // Create Material-UI theme
@@ -36,6 +37,7 @@ function App() {
       <AuthProvider>
         <Router>
           <div className="App">
+            {/* <AuthDebug /> */}
             <Navbar />
             <AppRoutes />
           </div>

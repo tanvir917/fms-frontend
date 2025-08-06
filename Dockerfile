@@ -1,11 +1,11 @@
-FROM node:18-alpine as builder
+FROM node:20-alpine as builder
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
-RUN npm run build
+RUN npm run build:docker
 
 FROM nginx:alpine
 COPY --from=builder /app/build /usr/share/nginx/html

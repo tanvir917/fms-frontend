@@ -1,240 +1,427 @@
-import api from './api';
+import { dotnetStaffApi, dotnetAuthApi } from './api';
 
+// Updated interfaces to match .NET backend DTOs
 export interface StaffProfile {
   id: number;
-  user: number;
-  user_email?: string;
-  user_first_name?: string;
-  user_last_name?: string;
-  full_name?: string;
-  employee_id: string;
-  department: 'nursing' | 'care' | 'admin' | 'management' | 'support';
-  position: 'carer' | 'nurse' | 'supervisor' | 'manager' | 'admin' | 'coordinator';
-  employment_type: 'full_time' | 'part_time' | 'casual' | 'contractor';
-  start_date: string;
-  end_date?: string;
-  hourly_rate: number;
-  date_of_birth: string;
-  address_line_1: string;
-  address_line_2?: string;
+  userId: number;
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  position: string;
+  department: string;
+  employmentType: string;
+  hourlyRate: number;
+  dateOfBirth: string;
+  addressLine1: string;
+  addressLine2?: string;
   city: string;
   state: string;
-  postal_code: string;
+  postalCode: string;
   qualifications?: string;
   certifications?: string;
-  preferred_hours_per_week?: number;
-  available_weekdays: boolean;
-  available_weekends: boolean;
-  available_nights: boolean;
-  emergency_contact_name: string;
-  emergency_contact_phone: string;
-  emergency_contact_relationship: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  preferredHoursPerWeek?: number;
+  availableWeekdays: boolean;
+  availableWeekends: boolean;
+  availableNights: boolean;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelationship: string;
+  startDate: string;
+  endDate?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  availabilities?: StaffAvailability[];
+  leaveRequests?: StaffLeave[];
+}
+
+export interface CreateStaffRequest {
+  userId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  position: string;
+  department: string;
+  employmentType: string;
+  hourlyRate: number;
+  dateOfBirth: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  qualifications?: string;
+  certifications?: string;
+  preferredHoursPerWeek?: number;
+  availableWeekdays: boolean;
+  availableWeekends: boolean;
+  availableNights: boolean;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelationship: string;
+  startDate: string;
+}
+
+export interface UpdateStaffRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  position: string;
+  department: string;
+  employmentType: string;
+  hourlyRate: number;
+  dateOfBirth: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  qualifications?: string;
+  certifications?: string;
+  preferredHoursPerWeek?: number;
+  availableWeekdays: boolean;
+  availableWeekends: boolean;
+  availableNights: boolean;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelationship: string;
+  startDate: string;
+  endDate?: string;
+  isActive: boolean;
 }
 
 export interface StaffAvailability {
   id: number;
-  staff: number;
-  staff_name?: string;
-  day_of_week: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
-  start_time: string;
-  end_time: string;
-  is_available: boolean;
+  staffId: number;
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStaffAvailabilityRequest {
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+  notes?: string;
+}
+
+export interface UpdateStaffAvailabilityRequest {
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
   notes?: string;
 }
 
 export interface StaffLeave {
   id: number;
-  staff: number;
-  staff_name?: string;
-  leave_type: 'annual' | 'sick' | 'personal' | 'maternity' | 'emergency' | 'unpaid';
-  start_date: string;
-  end_date: string;
+  staffId: number;
+  startDate: string;
+  endDate: string;
+  leaveType: string;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
-  approved_by?: number;
-  approved_by_name?: string;
+  status: string;
   comments?: string;
-  created_at: string;
-  updated_at: string;
+  approvedBy?: number;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStaffLeaveRequest {
+  startDate: string;
+  endDate: string;
+  leaveType: string;
+  reason: string;
+}
+
+export interface UpdateStaffLeaveRequest {
+  startDate: string;
+  endDate: string;
+  leaveType: string;
+  reason: string;
 }
 
 export interface User {
   id: number;
   username: string;
   email: string;
-  first_name: string;
-  last_name: string;
-  is_staff: boolean;
-  is_superuser: boolean;
-  is_active: boolean;
-  date_joined: string;
+  firstName: string;
+  lastName: string;
+  roles: string[];
 }
 
 export interface StaffStats {
-  total_staff: number;
-  active_staff: number;
-  on_leave: number;
-  total_departments: number;
-  department_breakdown: {
-    [key: string]: number;
-  };
-  employment_type_breakdown: {
-    [key: string]: number;
-  };
+  totalStaff: number;
+  activeStaff: number;
+  onLeave: number;
+  totalDepartments: number;
+  departmentBreakdown: { [key: string]: number };
+  employmentTypeBreakdown: { [key: string]: number };
+  positionBreakdown: { [key: string]: number };
+}
+
+interface PaginatedResponse<T> {
+  results: T[];
+  count: number;
+  next: string | null;
+  previous: string | null;
 }
 
 export const staffService = {
   // Staff Profile CRUD operations
-  getStaffProfiles: async (params?: any) => {
-    const response = await api.get('/staff/', { params });
-    return response.data;
+  getStaffProfiles: async (params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    department?: string;
+    position?: string;
+    employmentType?: string;
+    isActive?: boolean;
+  }): Promise<PaginatedResponse<StaffProfile>> => {
+    const queryParams: any = {};
+    if (params?.page) queryParams.page = params.page;
+    if (params?.pageSize) queryParams.pageSize = params.pageSize;
+    if (params?.search) queryParams.search = params.search;
+    if (params?.department) queryParams.department = params.department;
+    if (params?.position) queryParams.position = params.position;
+    if (params?.employmentType) queryParams.employmentType = params.employmentType;
+    if (params?.isActive !== undefined) queryParams.isActive = params.isActive;
+
+    const response = await dotnetStaffApi.get('/staff', { params: queryParams });
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to get staff profiles');
+    }
   },
 
-  getStaffProfile: async (id: number) => {
-    const response = await api.get(`/staff/${id}/`);
-    return response.data;
+  getStaffProfile: async (id: number): Promise<StaffProfile> => {
+    const response = await dotnetStaffApi.get(`/staff/${id}`);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to get staff profile');
+    }
   },
 
-  createStaffProfile: async (staffData: Partial<StaffProfile>) => {
-    const response = await api.post('/staff/', staffData);
-    return response.data;
+  createStaffProfile: async (staffData: CreateStaffRequest): Promise<StaffProfile> => {
+    const response = await dotnetStaffApi.post('/staff', staffData);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to create staff profile');
+    }
   },
 
-  updateStaffProfile: async (id: number, staffData: Partial<StaffProfile>) => {
-    const response = await api.put(`/staff/${id}/`, staffData);
-    return response.data;
+  updateStaffProfile: async (id: number, staffData: UpdateStaffRequest): Promise<StaffProfile> => {
+    const response = await dotnetStaffApi.put(`/staff/${id}`, staffData);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to update staff profile');
+    }
   },
 
-  deleteStaffProfile: async (id: number) => {
-    await api.delete(`/staff/${id}/`);
+  deleteStaffProfile: async (id: number): Promise<void> => {
+    const response = await dotnetStaffApi.delete(`/staff/${id}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete staff profile');
+    }
+  },
+
+  searchStaff: async (params?: {
+    query?: string;
+    department?: string;
+    position?: string;
+    employmentType?: string;
+    isActive?: boolean;
+  }): Promise<StaffProfile[]> => {
+    const queryParams: any = {};
+    if (params?.query) queryParams.query = params.query;
+    if (params?.department) queryParams.department = params.department;
+    if (params?.position) queryParams.position = params.position;
+    if (params?.employmentType) queryParams.employmentType = params.employmentType;
+    if (params?.isActive !== undefined) queryParams.isActive = params.isActive;
+
+    const response = await dotnetStaffApi.get('/staff/search', { params: queryParams });
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to search staff');
+    }
   },
 
   // Staff Statistics
-  getStaffStats: async () => {
-    try {
-      const response = await api.get('/staff/stats/');
-      return response.data;
-    } catch (error) {
-      // If stats endpoint doesn't exist, generate basic stats from staff list
-      console.warn('Staff stats endpoint not available, generating basic stats');
-      const staffResponse = await api.get('/staff/');
-      const staff = staffResponse.data.results || staffResponse.data || [];
-      
-      const totalStaff = staff.length;
-      const activeStaff = staff.filter((s: StaffProfile) => s.is_active).length;
-      
-      const departmentBreakdown: { [key: string]: number } = {};
-      const employmentTypeBreakdown: { [key: string]: number } = {};
-      
-      staff.forEach((s: StaffProfile) => {
-        departmentBreakdown[s.department] = (departmentBreakdown[s.department] || 0) + 1;
-        employmentTypeBreakdown[s.employment_type] = (employmentTypeBreakdown[s.employment_type] || 0) + 1;
-      });
-      
-      return {
-        total_staff: totalStaff,
-        active_staff: activeStaff,
-        on_leave: 0, // Would need to calculate from leave data
-        total_departments: Object.keys(departmentBreakdown).length,
-        department_breakdown: departmentBreakdown,
-        employment_type_breakdown: employmentTypeBreakdown,
-      };
+  getStaffStats: async (): Promise<StaffStats> => {
+    const response = await dotnetStaffApi.get('/staff/stats');
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to get staff statistics');
     }
   },
 
   // Staff Availability operations
-  getStaffAvailability: async (params?: { staff?: string | number } | number) => {
-    // Handle both old and new parameter formats
-    let queryParams = {};
-    if (typeof params === 'number') {
-      queryParams = { staff: params };
-    } else if (params && typeof params === 'object' && 'staff' in params) {
-      queryParams = { staff: params.staff };
+  getStaffAvailability: async (staffId: number): Promise<StaffAvailability[]> => {
+    const response = await dotnetStaffApi.get(`/staff/${staffId}/availability`);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to get staff availability');
     }
-    
-    const response = await api.get('/staff/availability/', { params: queryParams });
-    return response.data;
   },
 
-  createStaffAvailability: async (availabilityData: Partial<StaffAvailability>) => {
-    const response = await api.post('/staff/availability/', availabilityData);
-    return response.data;
-  },
-
-  updateStaffAvailability: async (id: number, availabilityData: Partial<StaffAvailability>) => {
-    const response = await api.put(`/staff/availability/${id}/`, availabilityData);
-    return response.data;
-  },
-
-  deleteStaffAvailability: async (id: number) => {
-    await api.delete(`/staff/availability/${id}/`);
-  },
-
-  // Staff Leave operations
-  getStaffLeave: async (params?: { staff?: string | number } | number) => {
-    // Handle both old and new parameter formats
-    let queryParams = {};
-    if (typeof params === 'number') {
-      queryParams = { staff: params };
-    } else if (params && typeof params === 'object' && 'staff' in params) {
-      queryParams = { staff: params.staff };
+  createStaffAvailability: async (staffId: number, availabilityData: CreateStaffAvailabilityRequest): Promise<StaffAvailability> => {
+    const response = await dotnetStaffApi.post(`/staff/${staffId}/availability`, availabilityData);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to create staff availability');
     }
-    
-    const response = await api.get('/staff/leave/', { params: queryParams });
-    return response.data;
   },
 
-  // Alias for backward compatibility
-  getStaffLeaveRequests: async (params?: { staff?: string | number } | number) => {
-    return staffService.getStaffLeave(params);
+  updateStaffAvailability: async (staffId: number, availabilityId: number, availabilityData: UpdateStaffAvailabilityRequest): Promise<StaffAvailability> => {
+    const response = await dotnetStaffApi.put(`/staff/${staffId}/availability/${availabilityId}`, availabilityData);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to update staff availability');
+    }
   },
 
-  createStaffLeave: async (leaveData: Partial<StaffLeave>) => {
-    const response = await api.post('/staff/leave/', leaveData);
-    return response.data;
+  deleteStaffAvailability: async (staffId: number, availabilityId: number): Promise<void> => {
+    const response = await dotnetStaffApi.delete(`/staff/${staffId}/availability/${availabilityId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete staff availability');
+    }
   },
 
-  updateStaffLeave: async (id: number, leaveData: Partial<StaffLeave>) => {
-    const response = await api.put(`/staff/leave/${id}/`, leaveData);
-    return response.data;
+  // Staff Leave Request operations
+  getStaffLeaveRequests: async (staffId: number): Promise<StaffLeave[]> => {
+    const response = await dotnetStaffApi.get(`/staff/${staffId}/leave-requests`);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to get leave requests');
+    }
   },
 
-  deleteStaffLeave: async (id: number) => {
-    await api.delete(`/staff/leave/${id}/`);
+  createLeaveRequest: async (staffId: number, leaveData: CreateStaffLeaveRequest): Promise<StaffLeave> => {
+    const response = await dotnetStaffApi.post(`/staff/${staffId}/leave-requests`, leaveData);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to create leave request');
+    }
   },
 
-  approveLeave: async (id: number, comments?: string) => {
-    const response = await api.patch(`/staff/leave/${id}/approve/`, { comments });
-    return response.data;
+  updateLeaveRequest: async (staffId: number, leaveId: number, leaveData: UpdateStaffLeaveRequest): Promise<StaffLeave> => {
+    const response = await dotnetStaffApi.put(`/staff/${staffId}/leave-requests/${leaveId}`, leaveData);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to update leave request');
+    }
   },
 
-  rejectLeave: async (id: number, comments?: string) => {
-    const response = await api.patch(`/staff/leave/${id}/reject/`, { comments });
-    return response.data;
+  approveLeaveRequest: async (staffId: number, leaveId: number, comments?: string): Promise<StaffLeave> => {
+    const response = await dotnetStaffApi.put(`/staff/${staffId}/leave-requests/${leaveId}/approve`, { comments });
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to approve leave request');
+    }
+  },
+
+  rejectLeaveRequest: async (staffId: number, leaveId: number, comments?: string): Promise<StaffLeave> => {
+    const response = await dotnetStaffApi.put(`/staff/${staffId}/leave-requests/${leaveId}/reject`, { comments });
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to reject leave request');
+    }
+  },
+
+  deleteLeaveRequest: async (staffId: number, leaveId: number): Promise<void> => {
+    const response = await dotnetStaffApi.delete(`/staff/${staffId}/leave-requests/${leaveId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete leave request');
+    }
   },
 
   // User management operations (for creating staff users)
-  // Fixed: Use /auth/users/ instead of /users/
-  getUsers: async (params?: any) => {
-    const response = await api.get('/auth/users/', { params });
-    return response.data;
+  getUsers: async (params?: any): Promise<User[]> => {
+    const response = await dotnetAuthApi.get('/auth/users', { params });
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to get users');
+    }
   },
 
-  createUser: async (userData: Partial<User>) => {
-    const response = await api.post('/auth/users/', userData);
-    return response.data;
+  getUserById: async (id: number): Promise<User> => {
+    const response = await dotnetAuthApi.get(`/auth/users/${id}`);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to get user');
+    }
   },
 
-  updateUser: async (id: number, userData: Partial<User>) => {
-    const response = await api.put(`/auth/users/${id}/`, userData);
-    return response.data;
+  createUser: async (userData: {
+    username: string;
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    role?: string;
+  }): Promise<User> => {
+    const registerData = {
+      username: userData.username,
+      email: userData.email,
+      password: userData.password,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      role: userData.role || 'Carer'
+    };
+    const response = await dotnetAuthApi.post('/auth/register', registerData);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to create user');
+    }
   },
 
-  deleteUser: async (id: number) => {
-    await api.delete(`/auth/users/${id}/`);
+  updateUser: async (id: number, userData: {
+    username?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    roles?: string[];
+  }): Promise<User> => {
+    const response = await dotnetAuthApi.put(`/auth/users/${id}`, userData);
+    if (response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.message || 'Failed to update user');
+    }
+  },
+
+  deleteUser: async (id: number): Promise<void> => {
+    const response = await dotnetAuthApi.delete(`/auth/users/${id}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete user');
+    }
   },
 };
 

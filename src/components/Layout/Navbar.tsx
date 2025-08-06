@@ -62,12 +62,12 @@ const Navbar: React.FC = () => {
     };
 
     const menuItems = [
-        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', roles: ['admin', 'manager', 'staff', 'supervisor'] },
-        { text: 'Clients', icon: <People />, path: '/clients', roles: ['admin', 'manager', 'staff', 'supervisor'] },
-        { text: 'Staff', icon: <Group />, path: '/staff', roles: ['admin', 'manager'] },
-        { text: 'Roster', icon: <Schedule />, path: '/roster', roles: ['admin', 'manager', 'staff', 'supervisor'] },
-        { text: 'Notes', icon: <Note />, path: '/notes', roles: ['admin', 'manager', 'staff', 'supervisor'] },
-        { text: 'Billing', icon: <Receipt />, path: '/billing', roles: ['admin', 'manager'] },
+        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', roles: ['Admin', 'Manager', 'Staff', 'Supervisor'] },
+        { text: 'Clients', icon: <People />, path: '/clients', roles: ['Admin', 'Manager', 'Staff', 'Supervisor'] },
+        { text: 'Staff', icon: <Group />, path: '/staff', roles: ['Admin', 'Manager'] },
+        { text: 'Roster', icon: <Schedule />, path: '/roster', roles: ['Admin', 'Manager', 'Staff', 'Supervisor'] },
+        { text: 'Notes', icon: <Note />, path: '/notes', roles: ['Admin', 'Manager', 'Staff', 'Supervisor'] },
+        { text: 'Billing', icon: <Receipt />, path: '/billing', roles: ['Admin', 'Manager'] },
     ];
 
     const filteredMenuItems = menuItems.filter(item =>

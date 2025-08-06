@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import api from '../services/api'; // Use the centralized API instance
+import api, { USE_DOTNET_APIS } from '../services/api'; // Use the centralized API instance
+import { dotNetAuthService } from '../services/dotnetApiService';
 
 // Types
 interface User {
@@ -21,6 +22,7 @@ interface AuthContextType {
     logout: () => void;
     register: (userData: RegisterData) => Promise<void>;
     updateProfile: (userData: Partial<User>) => Promise<void>;
+    backendType: string; // Add backend type indicator
 }
 
 interface RegisterData {
@@ -70,12 +72,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const login = async (username: string, password: string): Promise<void> => {
         try {
-            const response = await api.post<AuthResponse>('/auth/login/', {
-                username,
-                password,
-            });
+            console.log('Login attempt - Backend type:', USE_DOTNET_APIS ? '.NET Core' : 'Django');
+            let response: AuthResponse;
 
-            const { user: userData, tokens } = response.data;
+            if (USE_DOTNET_APIS) {
+                console.log('Attempting .NET login to:', 'http://localhost:5001');
+                // Use .NET Authentication API
+                response = await dotNetAuthService.login(username, password);
+            } else {
+                console.log('Attempting Django login to:', api.defaults.baseURL);
+                // Use Django API
+                const apiResponse = await api.post<AuthResponse>('/auth/login/', {
+                    username,
+                    password,
+                });
+                response = apiResponse.data;
+            }
+
+            const { user: userData, tokens } = response;
 
             // Store tokens and user data
             localStorage.setItem('accessToken', tokens.access);
@@ -83,17 +97,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.setItem('user', JSON.stringify(userData));
 
             setUser(userData);
+            console.log('Login successful for user:', userData.username);
         } catch (error: any) {
-            console.error('Login error:', error);
-            throw new Error(error.response?.data?.message || 'Login failed');
+            console.error('Login error details:', {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status,
+                backend: USE_DOTNET_APIS ? '.NET Core' : 'Django'
+            });
+
+            // Provide more specific error messages
+            let errorMessage = 'Login failed';
+            if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+                errorMessage = USE_DOTNET_APIS
+                    ? 'Cannot connect to .NET authentication service. Please ensure it is running on port 5001.'
+                    : 'Cannot connect to Django backend. Please ensure it is running on port 8000.';
+            } else if (error.response?.status === 401) {
+                errorMessage = 'Invalid username or password';
+            } else if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            throw new Error(errorMessage);
         }
     };
 
     const register = async (userData: RegisterData): Promise<void> => {
         try {
-            const response = await api.post<AuthResponse>('/auth/register/', userData);
+            let response: AuthResponse;
 
-            const { user: newUser, tokens } = response.data;
+            if (USE_DOTNET_APIS) {
+                // Convert to .NET format
+                const dotNetUserData = {
+                    username: userData.username,
+                    email: userData.email,
+                    password: userData.password,
+                    firstName: userData.first_name,
+                    lastName: userData.last_name,
+                    role: userData.user_type || 'User',
+                };
+
+                await dotNetAuthService.register(dotNetUserData);
+                // .NET register doesn't return tokens, so we need to login after
+                response = await dotNetAuthService.login(userData.username, userData.password);
+            } else {
+                // Use Django API
+                const apiResponse = await api.post<AuthResponse>('/auth/register/', userData);
+                response = apiResponse.data;
+            }
+
+            const { user: newUser, tokens } = response;
 
             // Store tokens and user data
             localStorage.setItem('accessToken', tokens.access);
@@ -109,9 +164,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const logout = async (): Promise<void> => {
         try {
-            const refreshToken = localStorage.getItem('refreshToken');
-            if (refreshToken) {
-                await api.post('/auth/logout/', { refresh: refreshToken });
+            if (!USE_DOTNET_APIS) {
+                // Only Django has logout API
+                const refreshToken = localStorage.getItem('refreshToken');
+                if (refreshToken) {
+                    await api.post('/auth/logout/', { refresh: refreshToken });
+                }
             }
         } catch (error) {
             console.error('Logout error:', error);
@@ -126,11 +184,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const updateProfile = async (profileData: Partial<User>): Promise<void> => {
         try {
-            const response = await api.patch<User>('/auth/profile/', profileData);
-            const updatedUser = response.data;
+            if (USE_DOTNET_APIS) {
+                // .NET doesn't have profile update endpoint yet
+                throw new Error('Profile update not available in .NET backend');
+            } else {
+                const response = await api.patch<User>('/auth/profile/', profileData);
+                const updatedUser = response.data;
 
-            setUser(updatedUser);
-            localStorage.setItem('user', JSON.stringify(updatedUser));
+                setUser(updatedUser);
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+            }
         } catch (error: any) {
             console.error('Profile update error:', error);
             throw new Error(error.response?.data?.message || 'Profile update failed');
@@ -143,7 +206,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         register,
         logout,
         updateProfile,
-        loading
+        loading,
+        backendType: USE_DOTNET_APIS ? '.NET Core' : 'Django'
     };
 
     return (

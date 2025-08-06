@@ -16,6 +16,7 @@ import BillingPage from '../pages/billing/BillingPage';
 import ProfilePage from '../pages/profile/ProfilePage';
 import ApiDebug from '../components/Debug/ApiDebug';
 import StaffDetailPage from '../pages/staff/StaffDetailPage';
+import BackendTestPage from '../pages/BackendTestPage';
 
 // Protected Route wrapper
 interface ProtectedRouteProps {
@@ -157,6 +158,16 @@ const AppRoutes: React.FC = () => {
                 element={
                     <ProtectedRoute>
                         <ApiDebug />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Backend test route */}
+            <Route
+                path="/test"
+                element={
+                    <ProtectedRoute>
+                        <BackendTestPage />
                     </ProtectedRoute>
                 }
             />
