@@ -108,16 +108,16 @@ export interface StaffAvailability {
 
 export interface CreateStaffAvailabilityRequest {
   dayOfWeek: string;
-  startTime: string;
-  endTime: string;
+  startTime: string; // TimeSpan format: "HH:mm:ss"
+  endTime: string;   // TimeSpan format: "HH:mm:ss"
   isAvailable: boolean;
   notes?: string;
 }
 
 export interface UpdateStaffAvailabilityRequest {
   dayOfWeek: string;
-  startTime: string;
-  endTime: string;
+  startTime: string; // TimeSpan format: "HH:mm:ss"
+  endTime: string;   // TimeSpan format: "HH:mm:ss"
   isAvailable: boolean;
   notes?: string;
 }

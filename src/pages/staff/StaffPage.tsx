@@ -40,6 +40,7 @@ import { useNavigate } from 'react-router-dom';
 import { staffService, StaffProfile, User } from '../../services/staffService';
 import { useAuth } from '../../contexts/AuthContext';
 import PageLayout from '../../components/Layout/PageLayout';
+import StaffAvailabilityManager from '../../components/staff/StaffAvailabilityManager';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -729,9 +730,7 @@ const StaffPage: React.FC = () => {
 
           {/* Availability Tab */}
           <TabPanel value={tabValue} index={2}>
-            <Alert severity="info">
-              Staff availability management coming soon...
-            </Alert>
+            <StaffAvailabilityManager staffProfiles={staffProfiles} onUpdate={loadData} />
           </TabPanel>
 
           {/* Leave Requests Tab */}
