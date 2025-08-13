@@ -76,7 +76,8 @@ export const convertDotNetUserToFrontend = (dotNetUser: DotNetUser) => ({
   email: dotNetUser.email,
   first_name: dotNetUser.firstName,
   last_name: dotNetUser.lastName,
-  user_type: dotNetUser.roles[0] || 'User',
+  user_type: dotNetUser.roles[0] || 'Staff', // Keep for backward compatibility
+  roles: dotNetUser.roles, // Add full roles array
   is_active: true,
 });
 

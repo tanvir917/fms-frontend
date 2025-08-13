@@ -27,8 +27,8 @@ import {
   Alert,
   Card,
   CardContent,
-  Grid,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   Add as AddIcon,
   Edit as EditIcon,

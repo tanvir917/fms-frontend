@@ -57,7 +57,7 @@ import {
     CheckCircle,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import { clientService, Client, ClientDocument, CarePlan, ClientNote } from '../../services/clientService';
+import { clientService, Client, ClientDocument, CarePlan, ClientNote, CareLevel, ClientStatus } from '../../services/clientService';
 import PageLayout from '../../components/Layout/PageLayout';
 
 interface TabPanelProps {
@@ -103,31 +103,30 @@ const ClientDetailPage: React.FC = () => {
     const [documentData, setDocumentData] = useState({
         title: '',
         description: '',
-        document_type: 'other',
+        documentType: 'Other',
     });
     const [carePlanData, setCarePlanData] = useState<Partial<CarePlan>>({
         title: '',
         description: '',
-        plan_type: 'ongoing',
-        care_goals: '',
-        intervention_strategies: '',
-        support_requirements: '',
-        start_date: '',
-        review_date: '',
-        status: 'draft',
+        goals: '',
+        interventionStrategies: '',
+        startDate: '',
+        reviewDate: '',
+        status: 0, // Draft as numeric value
     });
     const [noteData, setNoteData] = useState<Partial<ClientNote>>({
         title: '',
         content: '',
-        note_type: 'general',
-        priority: 'medium',
-        is_confidential: false,
+        noteType: 0, // General as numeric value
+        isPrivate: false,
     });
 
     const [selectedCarePlan, setSelectedCarePlan] = useState<CarePlan | null>(null);
     const [selectedNote, setSelectedNote] = useState<ClientNote | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [carePlanError, setCarePlanError] = useState<string | null>(null);
+    const [noteError, setNoteError] = useState<string | null>(null);
 
     useEffect(() => {
         if (id) {
@@ -150,9 +149,9 @@ const ClientDetailPage: React.FC = () => {
 
             setClient(clientData);
             setFormData(clientData);
-            setDocuments(documentsData.results || documentsData || []);
-            setCarePlans(carePlansData.results || carePlansData || []);
-            setNotes(notesData.results || notesData || []);
+            setDocuments(documentsData || []);
+            setCarePlans(carePlansData || []);
+            setNotes(notesData || []);
         } catch (err: any) {
             console.error('Error loading client data:', err);
             if (err.response?.status === 404) {
@@ -187,16 +186,17 @@ const ClientDetailPage: React.FC = () => {
 
         try {
             const formData = new FormData();
+            formData.append('clientId', id!);
             formData.append('file', documentFile);
             formData.append('title', documentData.title);
             formData.append('description', documentData.description);
-            formData.append('document_type', documentData.document_type);
+            formData.append('documentType', documentData.documentType);
 
             await clientService.uploadClientDocument(parseInt(id!), formData);
             setSuccess('Document uploaded successfully');
             setOpenDocumentDialog(false);
             setDocumentFile(null);
-            setDocumentData({ title: '', description: '', document_type: 'other' });
+            setDocumentData({ title: '', description: '', documentType: 'Other' });
             loadClientData();
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to upload document');
@@ -207,13 +207,34 @@ const ClientDetailPage: React.FC = () => {
 
     const handleCreateCarePlan = async () => {
         try {
-            // Ensure dates are in the correct format (YYYY-MM-DD)
-            const formattedData = {
-                ...carePlanData,
-                start_date: carePlanData.start_date ? new Date(carePlanData.start_date).toISOString().split('T')[0] : '',
-                review_date: carePlanData.review_date ? new Date(carePlanData.review_date).toISOString().split('T')[0] : '',
-                end_date: carePlanData.end_date ? new Date(carePlanData.end_date).toISOString().split('T')[0] : undefined,
+            setCarePlanError(null); // Clear previous errors
+
+            // Map status string to numeric enum value for .NET API
+            const statusMap: { [key: string]: number } = {
+                'Draft': 0,
+                'Active': 1,
+                'Inactive': 2,
+                'Completed': 3,
+                'Discontinued': 4
             };
+
+            // Ensure dates are in the correct format (ISO string)
+            const formattedData: any = {
+                ...carePlanData,
+                clientId: parseInt(id!), // Include clientId to match URL parameter
+                status: typeof carePlanData.status === 'string' ? statusMap[carePlanData.status] || 0 : carePlanData.status,
+            };
+
+            // Only include dates if they have values
+            if (carePlanData.startDate) {
+                formattedData.startDate = new Date(carePlanData.startDate).toISOString();
+            }
+            if (carePlanData.reviewDate) {
+                formattedData.reviewDate = new Date(carePlanData.reviewDate).toISOString();
+            }
+            if (carePlanData.endDate) {
+                formattedData.endDate = new Date(carePlanData.endDate).toISOString();
+            }
 
             if (selectedCarePlan) {
                 await clientService.updateCarePlan(parseInt(id!), selectedCarePlan.id, formattedData);
@@ -227,18 +248,37 @@ const ClientDetailPage: React.FC = () => {
             setCarePlanData({
                 title: '',
                 description: '',
-                plan_type: 'ongoing',
-                care_goals: '',
-                intervention_strategies: '',
-                support_requirements: '',
-                start_date: '',
-                review_date: '',
-                status: 'draft',
+                goals: '',
+                interventionStrategies: '',
+                startDate: '',
+                reviewDate: '',
+                status: 0, // Draft as numeric value
             });
             loadClientData();
         } catch (err: any) {
             console.error('Care plan error:', err.response?.data);
-            setError(err.response?.data?.message || err.response?.data || 'Failed to save care plan');
+
+            // Extract meaningful error message from .NET validation response
+            let errorMessage = 'Failed to save care plan';
+            if (err.response?.data) {
+                const responseData = err.response.data;
+                if (responseData.title) {
+                    errorMessage = responseData.title;
+                    // If there are specific validation errors, include them
+                    if (responseData.errors) {
+                        const validationErrors = Object.entries(responseData.errors)
+                            .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+                            .join('; ');
+                        errorMessage += ` - ${validationErrors}`;
+                    }
+                } else if (responseData.message) {
+                    errorMessage = responseData.message;
+                } else if (typeof responseData === 'string') {
+                    errorMessage = responseData;
+                }
+            }
+
+            setCarePlanError(errorMessage);
         }
     };
 
@@ -254,11 +294,29 @@ const ClientDetailPage: React.FC = () => {
 
     const handleCreateNote = async () => {
         try {
+            setNoteError(null); // Clear previous errors
+
+            // Map noteType string to numeric enum value for .NET API
+            const noteTypeMap: { [key: string]: number } = {
+                'General': 0,
+                'Medical': 1,
+                'Behavioral': 2,
+                'Care': 3,
+                'Administrative': 4
+            };
+
+            // Include clientId to match URL parameter for .NET API
+            const formattedNoteData = {
+                ...noteData,
+                clientId: parseInt(id!),
+                noteType: typeof noteData.noteType === 'string' ? noteTypeMap[noteData.noteType] || 0 : noteData.noteType,
+            };
+
             if (selectedNote) {
-                await clientService.updateClientNote(parseInt(id!), selectedNote.id, noteData);
+                await clientService.updateClientNote(parseInt(id!), selectedNote.id, formattedNoteData);
                 setSuccess('Note updated successfully');
             } else {
-                await clientService.createClientNote(parseInt(id!), noteData);
+                await clientService.createClientNote(parseInt(id!), formattedNoteData);
                 setSuccess('Note created successfully');
             }
             setOpenNoteDialog(false);
@@ -266,13 +324,34 @@ const ClientDetailPage: React.FC = () => {
             setNoteData({
                 title: '',
                 content: '',
-                note_type: 'general',
-                priority: 'medium',
-                is_confidential: false,
+                noteType: 0, // General as numeric value
+                isPrivate: false,
             });
             loadClientData();
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to save note');
+            console.error('Note error:', err.response?.data);
+
+            // Extract meaningful error message from .NET validation response
+            let errorMessage = 'Failed to save note';
+            if (err.response?.data) {
+                const responseData = err.response.data;
+                if (responseData.title) {
+                    errorMessage = responseData.title;
+                    // If there are specific validation errors, include them
+                    if (responseData.errors) {
+                        const validationErrors = Object.entries(responseData.errors)
+                            .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+                            .join('; ');
+                        errorMessage += ` - ${validationErrors}`;
+                    }
+                } else if (responseData.message) {
+                    errorMessage = responseData.message;
+                } else if (typeof responseData === 'string') {
+                    errorMessage = responseData;
+                }
+            }
+
+            setNoteError(errorMessage);
         }
     };
 
@@ -323,25 +402,69 @@ const ClientDetailPage: React.FC = () => {
         return age;
     };
 
-    const getCareLevel = (level: string) => {
-        const colors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'secondary'> = {
-            low: 'success',
-            medium: 'warning',
-            high: 'error',
-            respite: 'info',
-            palliative: 'secondary',
+    const getCareLevel = (level: CareLevel) => {
+        const colors: Record<CareLevel, 'success' | 'warning' | 'error' | 'info' | 'secondary'> = {
+            [CareLevel.Low]: 'success',
+            [CareLevel.Medium]: 'warning',
+            [CareLevel.High]: 'error',
+            [CareLevel.Respite]: 'info',
+            [CareLevel.Palliative]: 'secondary',
+        };
+        const labels: Record<CareLevel, string> = {
+            [CareLevel.Low]: 'Low',
+            [CareLevel.Medium]: 'Medium',
+            [CareLevel.High]: 'High',
+            [CareLevel.Respite]: 'Respite',
+            [CareLevel.Palliative]: 'Palliative',
         };
         return (
             <Chip
-                label={level.charAt(0).toUpperCase() + level.slice(1)}
+                label={labels[level]}
                 color={colors[level] || 'info'}
                 size="small"
             />
         );
     };
 
-    const getStatusIcon = (status: string) => {
-        switch (status) {
+    const getStatus = (status: ClientStatus) => {
+        const colors: Record<ClientStatus, 'success' | 'warning' | 'error' | 'info'> = {
+            [ClientStatus.Active]: 'success',
+            [ClientStatus.Inactive]: 'warning',
+            [ClientStatus.Discharged]: 'error',
+            [ClientStatus.Deceased]: 'error',
+            [ClientStatus.OnHold]: 'info',
+        };
+        const labels: Record<ClientStatus, string> = {
+            [ClientStatus.Active]: 'Active',
+            [ClientStatus.Inactive]: 'Inactive',
+            [ClientStatus.Discharged]: 'Discharged',
+            [ClientStatus.Deceased]: 'Deceased',
+            [ClientStatus.OnHold]: 'On Hold',
+        };
+        return (
+            <Chip
+                label={labels[status]}
+                color={colors[status]}
+                size="small"
+            />
+        );
+    };
+
+    const getStatusIcon = (status: string | number) => {
+        // Map numeric status values to strings (for .NET API compatibility)
+        const statusMap: { [key: number]: string } = {
+            0: 'draft',
+            1: 'active',
+            2: 'inactive',
+            3: 'completed',
+            4: 'discontinued'
+        };
+
+        const statusString = typeof status === 'number'
+            ? statusMap[status]
+            : status?.toString()?.toLowerCase();
+
+        switch (statusString) {
             case 'active':
                 return <ActiveIcon color="success" />;
             case 'draft':
@@ -349,10 +472,26 @@ const ClientDetailPage: React.FC = () => {
             case 'completed':
                 return <CheckCircle color="info" />;
             case 'cancelled':
+            case 'discontinued':
                 return <InactiveIcon color="error" />;
             default:
                 return <InactiveIcon color="disabled" />;
         }
+    };
+
+    const getNoteTypeDisplay = (noteType: string | number) => {
+        // Map numeric noteType values to display strings (for .NET API compatibility)
+        const noteTypeMap: { [key: number]: string } = {
+            0: 'General',
+            1: 'Medical',
+            2: 'Behavioral',
+            3: 'Care',
+            4: 'Administrative'
+        };
+
+        return typeof noteType === 'number'
+            ? noteTypeMap[noteType] || 'General'
+            : noteType;
     };
 
     const getPriorityColor = (priority: string) => {
@@ -362,7 +501,7 @@ const ClientDetailPage: React.FC = () => {
             high: '#f44336',
             urgent: '#d32f2f',
         };
-        return colors[priority] || '#757575';
+        return colors[priority?.toLowerCase()] || '#757575';
     };
 
     if (loading) {
@@ -401,7 +540,7 @@ const ClientDetailPage: React.FC = () => {
                 <Paper sx={{ p: 3, mb: 3 }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
                         <Typography variant="h4" component="h1">
-                            {client.first_name} {client.last_name}
+                            {client.firstName} {client.lastName}
                         </Typography>
                         <Button
                             variant="outlined"
@@ -413,16 +552,13 @@ const ClientDetailPage: React.FC = () => {
                     </Stack>
 
                     <Stack direction="row" spacing={2} mb={2}>
-                        <Chip label={`Age: ${getAge(client.date_of_birth)}`} icon={<PersonIcon />} />
-                        {getCareLevel(client.care_level)}
-                        <Chip
-                            label={client.status?.charAt(0).toUpperCase() + client.status?.slice(1)}
-                            color={client.status === 'active' ? 'success' : 'default'}
-                        />
+                        <Chip label={`Age: ${getAge(client.dateOfBirth)}`} icon={<PersonIcon />} />
+                        {getCareLevel(client.careLevel)}
+                        {getStatus(client.status)}
                     </Stack>
 
                     <Typography variant="body2" color="text.secondary">
-                        Client ID: {client.id} | Created: {new Date(client.created_at).toLocaleDateString()}
+                        Client ID: {client.id} | Created: {new Date(client.createdAt).toLocaleDateString()}
                     </Typography>
                 </Paper>
 
@@ -449,17 +585,15 @@ const ClientDetailPage: React.FC = () => {
                                         <Stack direction="row" spacing={4}>
                                             <Box>
                                                 <Typography variant="subtitle2">Date of Birth</Typography>
-                                                <Typography>{new Date(client.date_of_birth).toLocaleDateString()}</Typography>
+                                                <Typography>{new Date(client.dateOfBirth).toLocaleDateString()}</Typography>
                                             </Box>
                                             <Box>
                                                 <Typography variant="subtitle2">Gender</Typography>
-                                                <Typography>
-                                                    {client.gender === 'M' ? 'Male' : client.gender === 'F' ? 'Female' : 'Other'}
-                                                </Typography>
+                                                <Typography>{client.gender || 'Not specified'}</Typography>
                                             </Box>
                                             <Box>
                                                 <Typography variant="subtitle2">Phone</Typography>
-                                                <Typography>{client.phone_number || 'Not provided'}</Typography>
+                                                <Typography>{client.phoneNumber || 'Not provided'}</Typography>
                                             </Box>
                                             <Box>
                                                 <Typography variant="subtitle2">Email</Typography>
@@ -478,12 +612,9 @@ const ClientDetailPage: React.FC = () => {
                                         Address
                                     </Typography>
                                     <Typography>
-                                        {client.address_line_1}
-                                        {client.address_line_2 && <>, {client.address_line_2}</>}
+                                        {client.address}
                                         <br />
-                                        {client.city}, {client.state} {client.postal_code}
-                                        <br />
-                                        {client.country}
+                                        {client.city}, {client.state} {client.zipCode}
                                     </Typography>
                                 </CardContent>
                             </Card>
@@ -496,10 +627,10 @@ const ClientDetailPage: React.FC = () => {
                                         Medical Information
                                     </Typography>
                                     <Stack spacing={2}>
-                                        {client.medical_conditions && (
+                                        {client.medicalConditions && (
                                             <Box>
                                                 <Typography variant="subtitle2">Medical Conditions</Typography>
-                                                <Typography>{client.medical_conditions}</Typography>
+                                                <Typography>{client.medicalConditions}</Typography>
                                             </Box>
                                         )}
                                         {client.medications && (
@@ -514,10 +645,10 @@ const ClientDetailPage: React.FC = () => {
                                                 <Typography>{client.allergies}</Typography>
                                             </Box>
                                         )}
-                                        {client.dietary_requirements && (
+                                        {client.specialInstructions && (
                                             <Box>
-                                                <Typography variant="subtitle2">Dietary Requirements</Typography>
-                                                <Typography>{client.dietary_requirements}</Typography>
+                                                <Typography variant="subtitle2">Special Instructions</Typography>
+                                                <Typography>{client.specialInstructions}</Typography>
                                             </Box>
                                         )}
                                     </Stack>
@@ -534,15 +665,15 @@ const ClientDetailPage: React.FC = () => {
                                     <Stack direction="row" spacing={4}>
                                         <Box>
                                             <Typography variant="subtitle2">Name</Typography>
-                                            <Typography>{client.emergency_contact_name}</Typography>
+                                            <Typography>{client.emergencyContactName}</Typography>
                                         </Box>
                                         <Box>
                                             <Typography variant="subtitle2">Phone</Typography>
-                                            <Typography>{client.emergency_contact_phone}</Typography>
+                                            <Typography>{client.emergencyContactPhone}</Typography>
                                         </Box>
                                         <Box>
                                             <Typography variant="subtitle2">Relationship</Typography>
-                                            <Typography>{client.emergency_contact_relationship}</Typography>
+                                            <Typography>{client.emergencyContactRelationship}</Typography>
                                         </Box>
                                     </Stack>
                                 </CardContent>
@@ -558,7 +689,10 @@ const ClientDetailPage: React.FC = () => {
                                 <Button
                                     variant="contained"
                                     startIcon={<AddIcon />}
-                                    onClick={() => setOpenCarePlanDialog(true)}
+                                    onClick={() => {
+                                        setCarePlanError(null); // Clear any previous errors
+                                        setOpenCarePlanDialog(true);
+                                    }}
                                 >
                                     Add Care Plan
                                 </Button>
@@ -575,17 +709,15 @@ const ClientDetailPage: React.FC = () => {
                                                     <Stack direction="row" alignItems="center" spacing={1}>
                                                         <Typography variant="h6">{plan.title}</Typography>
                                                         {getStatusIcon(plan.status)}
-                                                        {plan.is_active && (
-                                                            <Chip label="ACTIVE" color="success" size="small" />
-                                                        )}
                                                     </Stack>
                                                     <Typography variant="body2" color="text.secondary">
-                                                        {plan.plan_type?.charAt(0).toUpperCase() + plan.plan_type?.slice(1)} Plan
+                                                        Created: {new Date(plan.createdAt).toLocaleDateString()}
                                                     </Typography>
                                                 </Box>
                                                 <Stack direction="row" spacing={1}>
                                                     <IconButton
                                                         onClick={() => {
+                                                            setCarePlanError(null); // Clear any previous errors
                                                             setSelectedCarePlan(plan);
                                                             setCarePlanData(plan);
                                                             setOpenCarePlanDialog(true);
@@ -593,16 +725,6 @@ const ClientDetailPage: React.FC = () => {
                                                     >
                                                         <EditIcon />
                                                     </IconButton>
-                                                    {!plan.is_active && (
-                                                        <Tooltip title="Activate this care plan">
-                                                            <IconButton
-                                                                onClick={() => handleActivateCarePlan(plan.id)}
-                                                                color="primary"
-                                                            >
-                                                                <CheckCircle />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                    )}
                                                     <IconButton
                                                         onClick={() => handleDeleteCarePlan(plan.id)}
                                                         color="error"
@@ -621,26 +743,24 @@ const ClientDetailPage: React.FC = () => {
                                                 <AccordionDetails>
                                                     <Stack spacing={2}>
                                                         <Box>
-                                                            <Typography variant="subtitle2">Care Goals</Typography>
-                                                            <Typography>{plan.care_goals}</Typography>
+                                                            <Typography variant="subtitle2">Goals</Typography>
+                                                            <Typography>{plan.goals}</Typography>
                                                         </Box>
                                                         <Box>
                                                             <Typography variant="subtitle2">Intervention Strategies</Typography>
-                                                            <Typography>{plan.intervention_strategies}</Typography>
-                                                        </Box>
-                                                        <Box>
-                                                            <Typography variant="subtitle2">Support Requirements</Typography>
-                                                            <Typography>{plan.support_requirements}</Typography>
+                                                            <Typography>{plan.interventionStrategies}</Typography>
                                                         </Box>
                                                         <Stack direction="row" spacing={4}>
                                                             <Box>
                                                                 <Typography variant="subtitle2">Start Date</Typography>
-                                                                <Typography>{new Date(plan.start_date).toLocaleDateString()}</Typography>
+                                                                <Typography>{new Date(plan.startDate).toLocaleDateString()}</Typography>
                                                             </Box>
-                                                            <Box>
-                                                                <Typography variant="subtitle2">Review Date</Typography>
-                                                                <Typography>{new Date(plan.review_date).toLocaleDateString()}</Typography>
-                                                            </Box>
+                                                            {plan.reviewDate && (
+                                                                <Box>
+                                                                    <Typography variant="subtitle2">Review Date</Typography>
+                                                                    <Typography>{new Date(plan.reviewDate).toLocaleDateString()}</Typography>
+                                                                </Box>
+                                                            )}
                                                         </Stack>
                                                     </Stack>
                                                 </AccordionDetails>
@@ -660,7 +780,10 @@ const ClientDetailPage: React.FC = () => {
                                 <Button
                                     variant="contained"
                                     startIcon={<AddIcon />}
-                                    onClick={() => setOpenNoteDialog(true)}
+                                    onClick={() => {
+                                        setNoteError(null); // Clear any previous errors
+                                        setOpenNoteDialog(true);
+                                    }}
                                 >
                                     Add Note
                                 </Button>
@@ -676,26 +799,18 @@ const ClientDetailPage: React.FC = () => {
                                                 <Box>
                                                     <Stack direction="row" alignItems="center" spacing={1}>
                                                         <Typography variant="h6">{note.title}</Typography>
-                                                        <Chip
-                                                            label={note.priority?.toUpperCase()}
-                                                            style={{
-                                                                backgroundColor: getPriorityColor(note.priority),
-                                                                color: 'white',
-                                                            }}
-                                                            size="small"
-                                                        />
-                                                        {note.is_confidential && (
-                                                            <Chip label="CONFIDENTIAL" color="secondary" size="small" />
+                                                        {note.isPrivate && (
+                                                            <Chip label="PRIVATE" color="secondary" size="small" />
                                                         )}
                                                     </Stack>
                                                     <Typography variant="body2" color="text.secondary">
-                                                        {note.note_type?.charAt(0).toUpperCase() + note.note_type?.slice(1)} •
-                                                        {new Date(note.created_at).toLocaleDateString()}
+                                                        {getNoteTypeDisplay(note.noteType)} • {new Date(note.createdAt).toLocaleDateString()}
                                                     </Typography>
                                                 </Box>
                                                 <Stack direction="row" spacing={1}>
                                                     <IconButton
                                                         onClick={() => {
+                                                            setNoteError(null); // Clear any previous errors
                                                             setSelectedNote(note);
                                                             setNoteData(note);
                                                             setOpenNoteDialog(true);
@@ -745,8 +860,7 @@ const ClientDetailPage: React.FC = () => {
                                                     <Box>
                                                         <Typography variant="h6">{document.title}</Typography>
                                                         <Typography variant="body2" color="text.secondary">
-                                                            {document.document_type?.replace('_', ' ').toUpperCase()} •
-                                                            Uploaded {new Date(document.uploaded_at).toLocaleDateString()}
+                                                            {document.documentType} • Uploaded {new Date(document.uploadDate).toLocaleDateString()}
                                                         </Typography>
                                                         {document.description && (
                                                             <Typography variant="body2">{document.description}</Typography>
@@ -755,9 +869,21 @@ const ClientDetailPage: React.FC = () => {
                                                 </Stack>
                                                 <Stack direction="row" spacing={1}>
                                                     <IconButton
-                                                        component="a"
-                                                        href={document.file}
-                                                        target="_blank"
+                                                        onClick={async () => {
+                                                            try {
+                                                                const blob = await clientService.downloadClientDocument(parseInt(id!), document.id);
+                                                                const url = window.URL.createObjectURL(blob);
+                                                                const link = window.document.createElement('a');
+                                                                link.href = url;
+                                                                link.download = document.fileName || 'document';
+                                                                window.document.body.appendChild(link);
+                                                                link.click();
+                                                                window.document.body.removeChild(link);
+                                                                window.URL.revokeObjectURL(url);
+                                                            } catch (err: any) {
+                                                                setError(err.response?.data?.message || 'Failed to download document');
+                                                            }
+                                                        }}
                                                         color="primary"
                                                     >
                                                         <DownloadIcon />
@@ -786,14 +912,14 @@ const ClientDetailPage: React.FC = () => {
                             <Stack direction="row" spacing={2}>
                                 <TextField
                                     label="First Name"
-                                    value={formData.first_name || ''}
-                                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                                    value={formData.firstName || ''}
+                                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                                     fullWidth
                                 />
                                 <TextField
                                     label="Last Name"
-                                    value={formData.last_name || ''}
-                                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                                    value={formData.lastName || ''}
+                                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                                     fullWidth
                                 />
                             </Stack>
@@ -807,21 +933,15 @@ const ClientDetailPage: React.FC = () => {
                                 />
                                 <TextField
                                     label="Phone"
-                                    value={formData.phone_number || ''}
-                                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                                    value={formData.phoneNumber || ''}
+                                    onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                                     fullWidth
                                 />
                             </Stack>
                             <TextField
-                                label="Address Line 1"
-                                value={formData.address_line_1 || ''}
-                                onChange={(e) => setFormData({ ...formData, address_line_1: e.target.value })}
-                                fullWidth
-                            />
-                            <TextField
-                                label="Address Line 2"
-                                value={formData.address_line_2 || ''}
-                                onChange={(e) => setFormData({ ...formData, address_line_2: e.target.value })}
+                                label="Address"
+                                value={formData.address || ''}
+                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                                 fullWidth
                             />
                             <Stack direction="row" spacing={2}>
@@ -838,9 +958,9 @@ const ClientDetailPage: React.FC = () => {
                                     fullWidth
                                 />
                                 <TextField
-                                    label="Postal Code"
-                                    value={formData.postal_code || ''}
-                                    onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
+                                    label="Postcode"
+                                    value={formData.zipCode || ''}
+                                    onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
                                     fullWidth
                                 />
                             </Stack>
@@ -848,8 +968,8 @@ const ClientDetailPage: React.FC = () => {
                                 label="Medical Conditions"
                                 multiline
                                 rows={3}
-                                value={formData.medical_conditions || ''}
-                                onChange={(e) => setFormData({ ...formData, medical_conditions: e.target.value })}
+                                value={formData.medicalConditions || ''}
+                                onChange={(e) => setFormData({ ...formData, medicalConditions: e.target.value })}
                                 fullWidth
                             />
                             <TextField
@@ -891,16 +1011,16 @@ const ClientDetailPage: React.FC = () => {
                             <FormControl fullWidth>
                                 <InputLabel>Document Type</InputLabel>
                                 <Select
-                                    value={documentData.document_type}
-                                    onChange={(e) => setDocumentData({ ...documentData, document_type: e.target.value })}
+                                    value={documentData.documentType}
+                                    onChange={(e) => setDocumentData({ ...documentData, documentType: e.target.value })}
                                 >
-                                    <MenuItem value="care_plan">Care Plan</MenuItem>
-                                    <MenuItem value="medical_record">Medical Record</MenuItem>
-                                    <MenuItem value="assessment">Assessment</MenuItem>
-                                    <MenuItem value="photo_id">Photo ID</MenuItem>
-                                    <MenuItem value="insurance">Insurance Document</MenuItem>
-                                    <MenuItem value="consent_form">Consent Form</MenuItem>
-                                    <MenuItem value="other">Other</MenuItem>
+                                    <MenuItem value="Medical">Medical Record</MenuItem>
+                                    <MenuItem value="Legal">Legal Document</MenuItem>
+                                    <MenuItem value="Insurance">Insurance Document</MenuItem>
+                                    <MenuItem value="Personal">Personal Document</MenuItem>
+                                    <MenuItem value="Care">Care Document</MenuItem>
+                                    <MenuItem value="Assessment">Assessment</MenuItem>
+                                    <MenuItem value="Other">Other</MenuItem>
                                 </Select>
                             </FormControl>
                             <TextField
@@ -928,6 +1048,11 @@ const ClientDetailPage: React.FC = () => {
                 <Dialog open={openCarePlanDialog} onClose={() => setOpenCarePlanDialog(false)} maxWidth="md" fullWidth>
                     <DialogTitle>{selectedCarePlan ? 'Edit Care Plan' : 'Create Care Plan'}</DialogTitle>
                     <DialogContent>
+                        {carePlanError && (
+                            <Alert severity="error" sx={{ mb: 2 }}>
+                                {carePlanError}
+                            </Alert>
+                        )}
                         <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
                                 label="Title"
@@ -938,28 +1063,16 @@ const ClientDetailPage: React.FC = () => {
                             />
                             <Stack direction="row" spacing={2}>
                                 <FormControl fullWidth>
-                                    <InputLabel>Plan Type</InputLabel>
-                                    <Select
-                                        value={carePlanData.plan_type || 'ongoing'}
-                                        onChange={(e) => setCarePlanData({ ...carePlanData, plan_type: e.target.value as any })}
-                                    >
-                                        <MenuItem value="initial">Initial Assessment</MenuItem>
-                                        <MenuItem value="ongoing">Ongoing Care</MenuItem>
-                                        <MenuItem value="respite">Respite Care</MenuItem>
-                                        <MenuItem value="palliative">Palliative Care</MenuItem>
-                                        <MenuItem value="transitional">Transitional Care</MenuItem>
-                                    </Select>
-                                </FormControl>
-                                <FormControl fullWidth>
                                     <InputLabel>Status</InputLabel>
                                     <Select
-                                        value={carePlanData.status || 'draft'}
-                                        onChange={(e) => setCarePlanData({ ...carePlanData, status: e.target.value as any })}
+                                        value={carePlanData.status || 0}
+                                        onChange={(e) => setCarePlanData({ ...carePlanData, status: Number(e.target.value) })}
                                     >
-                                        <MenuItem value="draft">Draft</MenuItem>
-                                        <MenuItem value="active">Active</MenuItem>
-                                        <MenuItem value="completed">Completed</MenuItem>
-                                        <MenuItem value="cancelled">Cancelled</MenuItem>
+                                        <MenuItem value={0}>Draft</MenuItem>
+                                        <MenuItem value={1}>Active</MenuItem>
+                                        <MenuItem value={2}>Inactive</MenuItem>
+                                        <MenuItem value={3}>Completed</MenuItem>
+                                        <MenuItem value={4}>Discontinued</MenuItem>
                                     </Select>
                                 </FormControl>
                             </Stack>
@@ -972,43 +1085,35 @@ const ClientDetailPage: React.FC = () => {
                                 fullWidth
                             />
                             <TextField
-                                label="Care Goals"
+                                label="Goals"
                                 multiline
                                 rows={3}
-                                value={carePlanData.care_goals || ''}
-                                onChange={(e) => setCarePlanData({ ...carePlanData, care_goals: e.target.value })}
+                                value={carePlanData.goals || ''}
+                                onChange={(e) => setCarePlanData({ ...carePlanData, goals: e.target.value })}
                                 fullWidth
                             />
                             <TextField
                                 label="Intervention Strategies"
                                 multiline
                                 rows={3}
-                                value={carePlanData.intervention_strategies || ''}
-                                onChange={(e) => setCarePlanData({ ...carePlanData, intervention_strategies: e.target.value })}
-                                fullWidth
-                            />
-                            <TextField
-                                label="Support Requirements"
-                                multiline
-                                rows={3}
-                                value={carePlanData.support_requirements || ''}
-                                onChange={(e) => setCarePlanData({ ...carePlanData, support_requirements: e.target.value })}
+                                value={carePlanData.interventionStrategies || ''}
+                                onChange={(e) => setCarePlanData({ ...carePlanData, interventionStrategies: e.target.value })}
                                 fullWidth
                             />
                             <Stack direction="row" spacing={2}>
                                 <TextField
                                     label="Start Date"
                                     type="date"
-                                    value={carePlanData.start_date || ''}
-                                    onChange={(e) => setCarePlanData({ ...carePlanData, start_date: e.target.value })}
+                                    value={carePlanData.startDate || ''}
+                                    onChange={(e) => setCarePlanData({ ...carePlanData, startDate: e.target.value })}
                                     fullWidth
                                     InputLabelProps={{ shrink: true }}
                                 />
                                 <TextField
                                     label="Review Date"
                                     type="date"
-                                    value={carePlanData.review_date || ''}
-                                    onChange={(e) => setCarePlanData({ ...carePlanData, review_date: e.target.value })}
+                                    value={carePlanData.reviewDate || ''}
+                                    onChange={(e) => setCarePlanData({ ...carePlanData, reviewDate: e.target.value })}
                                     fullWidth
                                     InputLabelProps={{ shrink: true }}
                                 />
@@ -1027,6 +1132,11 @@ const ClientDetailPage: React.FC = () => {
                 <Dialog open={openNoteDialog} onClose={() => setOpenNoteDialog(false)} maxWidth="md" fullWidth>
                     <DialogTitle>{selectedNote ? 'Edit Note' : 'Create Note'}</DialogTitle>
                     <DialogContent>
+                        {noteError && (
+                            <Alert severity="error" sx={{ mb: 2 }}>
+                                {noteError}
+                            </Alert>
+                        )}
                         <Stack spacing={2} sx={{ mt: 1 }}>
                             <TextField
                                 label="Title"
@@ -1039,26 +1149,14 @@ const ClientDetailPage: React.FC = () => {
                                 <FormControl fullWidth>
                                     <InputLabel>Note Type</InputLabel>
                                     <Select
-                                        value={noteData.note_type || 'general'}
-                                        onChange={(e) => setNoteData({ ...noteData, note_type: e.target.value as any })}
+                                        value={noteData.noteType || 0}
+                                        onChange={(e) => setNoteData({ ...noteData, noteType: Number(e.target.value) })}
                                     >
-                                        <MenuItem value="general">General Note</MenuItem>
-                                        <MenuItem value="medical">Medical Observation</MenuItem>
-                                        <MenuItem value="behavioral">Behavioral Note</MenuItem>
-                                        <MenuItem value="incident">Incident Report</MenuItem>
-                                        <MenuItem value="care_update">Care Update</MenuItem>
-                                    </Select>
-                                </FormControl>
-                                <FormControl fullWidth>
-                                    <InputLabel>Priority</InputLabel>
-                                    <Select
-                                        value={noteData.priority || 'medium'}
-                                        onChange={(e) => setNoteData({ ...noteData, priority: e.target.value as any })}
-                                    >
-                                        <MenuItem value="low">Low</MenuItem>
-                                        <MenuItem value="medium">Medium</MenuItem>
-                                        <MenuItem value="high">High</MenuItem>
-                                        <MenuItem value="urgent">Urgent</MenuItem>
+                                        <MenuItem value={0}>General Note</MenuItem>
+                                        <MenuItem value={1}>Medical Observation</MenuItem>
+                                        <MenuItem value={2}>Behavioral Note</MenuItem>
+                                        <MenuItem value={3}>Care Update</MenuItem>
+                                        <MenuItem value={4}>Administrative</MenuItem>
                                     </Select>
                                 </FormControl>
                             </Stack>
@@ -1075,10 +1173,10 @@ const ClientDetailPage: React.FC = () => {
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <input
                                         type="checkbox"
-                                        checked={noteData.is_confidential || false}
-                                        onChange={(e) => setNoteData({ ...noteData, is_confidential: e.target.checked })}
+                                        checked={noteData.isPrivate || false}
+                                        onChange={(e) => setNoteData({ ...noteData, isPrivate: e.target.checked })}
                                     />
-                                    <Typography>Mark as confidential</Typography>
+                                    <Typography>Mark as private</Typography>
                                 </Stack>
                             </FormControl>
                         </Stack>

@@ -2,29 +2,35 @@ import React, { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
+  Box,
   Button,
-  Paper,
+  Card,
+  CardContent,
+  Grid,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
   Select,
   MenuItem,
-  Chip,
+  FormControl,
+  InputLabel,
   Alert,
-  Stack,
-  Box,
-  Tab,
   Tabs,
-  Card,
-  CardContent,
+  Tab,
+  IconButton,
+  Paper,
+  Chip,
+  Avatar,
+  Tooltip,
+  Stack,
+  Switch,
 } from '@mui/material';
 import {
   DataGrid,
   GridColDef,
+  GridRenderCellParams,
   GridActionsCellItem,
   GridRowParams,
 } from '@mui/x-data-grid';
@@ -32,15 +38,20 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
   Person as PersonIcon,
-  SupervisorAccount as AdminIcon,
+  AdminPanelSettings as AdminIcon,
+  Visibility as VisibilityIcon,
+  PersonAdd as PersonAddIcon,
+  Visibility as ViewIcon,
+  VpnKey as PasswordResetIcon,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { staffService, StaffProfile, User } from '../../services/staffService';
-import { useAuth } from '../../contexts/AuthContext';
 import PageLayout from '../../components/Layout/PageLayout';
+import RoleBasedAccess, { AdminOnly, ManagerOrAbove } from '../../components/Auth/RoleBasedAccess';
+import { useAuth } from '../../contexts/AuthContext';
+import staffService, { StaffProfile, User } from '../../services/staffService';
 import StaffAvailabilityManager from '../../components/staff/StaffAvailabilityManager';
+import StaffLeaveManager from '../../components/staff/StaffLeaveManager';
+import { useNavigate } from 'react-router-dom';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -71,6 +82,48 @@ function TabPanel(props: TabPanelProps) {
 const StaffPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Helper function to get user privilege level
+  const getUserPrivilegeLevel = () => {
+    if (!user) {
+      return 0;
+    }
+
+    const rolePrivileges: { [key: string]: number } = {
+      'Admin': 4,
+      'Manager': 3,
+      'Care_Coordinator': 2,
+      'Staff': 1
+    };
+
+    // Try to use roles array first, fallback to user_type
+    let privilegeLevel = 0;
+
+    if (user.roles && user.roles.length > 0) {
+      privilegeLevel = Math.max(...user.roles.map(role => rolePrivileges[role] || 0));
+    } else if (user.user_type) {
+      privilegeLevel = rolePrivileges[user.user_type] || 0;
+    }
+
+    return privilegeLevel;
+  };  // Helper function to check if user can perform action
+  const canPerformAction = (action: string) => {
+    const privilegeLevel = getUserPrivilegeLevel();
+    console.log(`Debug - Checking action '${action}' with privilege level:`, privilegeLevel);
+
+    switch (action) {
+      case 'create':
+        return privilegeLevel >= 3; // Manager or above
+      case 'edit':
+        return privilegeLevel >= 2; // Care Coordinator or above
+      case 'delete':
+        return privilegeLevel >= 4; // Admin only
+      case 'view':
+        return privilegeLevel >= 1; // All authenticated users
+      default:
+        return false;
+    }
+  };
   const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +143,7 @@ const StaffPage: React.FC = () => {
     email: '',
     phoneNumber: '',
     department: 'care',
-    position: 'carer',
+    position: 'care_worker',
     employmentType: 'full_time',
     startDate: '',
     hourlyRate: 0,
@@ -145,6 +198,11 @@ const StaffPage: React.FC = () => {
   const validateStaffForm = () => {
     const errors: Record<string, string> = {};
 
+    // User selection is required
+    if (!staffFormData.userId || staffFormData.userId === 0) {
+      errors.userId = 'Please select a user account to link to this staff profile';
+    }
+
     // Required field validation (skip name and email if user is selected)
     if (!staffFormData.userId && !staffFormData.firstName?.trim()) {
       errors.firstName = 'First name is required';
@@ -177,6 +235,30 @@ const StaffPage: React.FC = () => {
     }
     if (!staffFormData.startDate?.trim()) {
       errors.startDate = 'Start date is required';
+    }
+    if (!staffFormData.employeeId?.trim()) {
+      errors.employeeId = 'Employee ID is required';
+    }
+    if (!staffFormData.addressLine1?.trim()) {
+      errors.addressLine1 = 'Address is required';
+    }
+    if (!staffFormData.city?.trim()) {
+      errors.city = 'City is required';
+    }
+    if (!staffFormData.state?.trim()) {
+      errors.state = 'State is required';
+    }
+    if (!staffFormData.postalCode?.trim()) {
+      errors.postalCode = 'Postal code is required';
+    }
+    if (!staffFormData.emergencyContactName?.trim()) {
+      errors.emergencyContactName = 'Emergency contact name is required';
+    }
+    if (!staffFormData.emergencyContactPhone?.trim()) {
+      errors.emergencyContactPhone = 'Emergency contact phone is required';
+    }
+    if (staffFormData.hourlyRate !== undefined && staffFormData.hourlyRate < 0) {
+      errors.hourlyRate = 'Hourly rate must be positive';
     }
 
     setFormErrors(errors);
@@ -246,13 +328,41 @@ const StaffPage: React.FC = () => {
         });
         setSuccess('Staff profile updated successfully');
       } else {
+        console.log('Creating staff profile with data:', {
+          userId: staffFormData.userId || 0,
+          firstName: staffFormData.firstName || '',
+          lastName: staffFormData.lastName || '',
+          email: staffFormData.email || '',
+          phoneNumber: staffFormData.phoneNumber || '',
+          position: staffFormData.position || 'care_worker',
+          department: staffFormData.department || 'care',
+          employmentType: staffFormData.employmentType || 'full_time',
+          hourlyRate: staffFormData.hourlyRate || 0,
+          dateOfBirth: staffFormData.dateOfBirth || new Date().toISOString().split('T')[0],
+          addressLine1: staffFormData.addressLine1 || '',
+          addressLine2: staffFormData.addressLine2,
+          city: staffFormData.city || '',
+          state: staffFormData.state || '',
+          postalCode: staffFormData.postalCode || '',
+          qualifications: staffFormData.qualifications,
+          certifications: staffFormData.certifications,
+          preferredHoursPerWeek: staffFormData.preferredHoursPerWeek,
+          availableWeekdays: staffFormData.availableWeekdays ?? true,
+          availableWeekends: staffFormData.availableWeekends ?? false,
+          availableNights: staffFormData.availableNights ?? false,
+          emergencyContactName: staffFormData.emergencyContactName || '',
+          emergencyContactPhone: staffFormData.emergencyContactPhone || '',
+          emergencyContactRelationship: staffFormData.emergencyContactRelationship || '',
+          startDate: staffFormData.startDate || new Date().toISOString().split('T')[0]
+        });
+
         await staffService.createStaffProfile({
           userId: staffFormData.userId || 0,
           firstName: staffFormData.firstName || '',
           lastName: staffFormData.lastName || '',
           email: staffFormData.email || '',
           phoneNumber: staffFormData.phoneNumber || '',
-          position: staffFormData.position || 'carer',
+          position: staffFormData.position || 'care_worker',
           department: staffFormData.department || 'care',
           employmentType: staffFormData.employmentType || 'full_time',
           hourlyRate: staffFormData.hourlyRate || 0,
@@ -278,19 +388,33 @@ const StaffPage: React.FC = () => {
       handleCloseStaffDialog();
       loadData();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to save staff profile');
+      console.error('Staff save error:', err);
+      if (err.response?.data) {
+        console.error('Error details:', err.response.data);
+      }
+      setError(err.message || err.response?.data?.message || 'Failed to save staff profile');
     }
   };
 
   const handleSaveUser = async () => {
     try {
       if (selectedUser) {
-        // For updates, remove password if it's empty
+        // For updates, handle password separately if user is admin
         const updateData = { ...userFormData };
-        if (!updateData.password) {
-          delete updateData.password;
-        }
+        const passwordToSet = updateData.password;
+        delete updateData.password; // Remove password from update data
+
+        // Update user details first
         await staffService.updateUser(selectedUser.id!, updateData);
+
+        // If password is provided and user is admin, use admin password reset
+        if (passwordToSet && passwordToSet.trim() !== '') {
+          const privilegeLevel = getUserPrivilegeLevel();
+          if (privilegeLevel >= 4) { // Admin level
+            await staffService.adminChangePassword(selectedUser.id!, passwordToSet);
+          }
+        }
+
         setSuccess('User updated successfully');
       } else {
         // For creation, password is required
@@ -328,6 +452,18 @@ const StaffPage: React.FC = () => {
     }
   };
 
+  const handleResetPassword = async (userId: number, userName: string) => {
+    const newPassword = prompt(`Enter new password for ${userName}:`);
+    if (newPassword && newPassword.trim() !== '') {
+      try {
+        await staffService.adminChangePassword(userId, newPassword);
+        setSuccess(`Password reset successfully for ${userName}`);
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to reset password');
+      }
+    }
+  };
+
   const handleOpenStaffDialog = (staff?: StaffProfile) => {
     setSelectedStaff(staff || null);
     setStaffFormData(staff || {
@@ -337,7 +473,7 @@ const StaffPage: React.FC = () => {
       email: '',
       phoneNumber: '',
       department: 'care',
-      position: 'carer',
+      position: 'care_worker',
       employmentType: 'full_time',
       startDate: '',
       hourlyRate: 0,
@@ -414,9 +550,17 @@ const StaffPage: React.FC = () => {
     switch (position) {
       case 'manager':
       case 'supervisor':
+      case 'team_leader':
+      case 'coordinator':
         return <AdminIcon />;
+      case 'registered_nurse':
       case 'nurse':
         return <PersonIcon color="error" />;
+      case 'social_worker':
+        return <PersonIcon color="info" />;
+      case 'care_worker':
+      case 'carer':
+      case 'support_worker':
       default:
         return <PersonIcon />;
     }
@@ -502,23 +646,42 @@ const StaffPage: React.FC = () => {
       type: 'actions',
       headerName: 'Actions',
       width: 120,
-      getActions: (params: GridRowParams) => [
-        <GridActionsCellItem
-          icon={<ViewIcon />}
-          label="View"
-          onClick={() => navigate(`/staff/${params.id}`)}
-        />,
-        <GridActionsCellItem
-          icon={<EditIcon />}
-          label="Edit"
-          onClick={() => handleOpenStaffDialog(params.row)}
-        />,
-        <GridActionsCellItem
-          icon={<DeleteIcon />}
-          label="Delete"
-          onClick={() => handleDeleteStaff(params.id as number)}
-        />,
-      ],
+      getActions: (params: GridRowParams) => {
+        const actions = [];
+
+        if (canPerformAction('view')) {
+          actions.push(
+            <GridActionsCellItem
+              icon={<ViewIcon />}
+              label="View"
+              onClick={() => navigate(`/staff/${params.id}`)}
+            />
+          );
+        }
+
+        if (canPerformAction('edit')) {
+          actions.push(
+            <GridActionsCellItem
+              icon={<EditIcon />}
+              label="Edit"
+              onClick={() => handleOpenStaffDialog(params.row)}
+            />
+          );
+        }
+
+        if (canPerformAction('delete')) {
+          actions.push(
+            <GridActionsCellItem
+              icon={<DeleteIcon />}
+              label="Delete"
+              onClick={() => handleDeleteStaff(params.id as number)}
+              showInMenu
+            />
+          );
+        }
+
+        return actions;
+      },
     },
   ];
 
@@ -554,18 +717,44 @@ const StaffPage: React.FC = () => {
       type: 'actions',
       headerName: 'Actions',
       width: 100,
-      getActions: (params: GridRowParams) => [
-        <GridActionsCellItem
-          icon={<EditIcon />}
-          label="Edit"
-          onClick={() => handleOpenUserDialog(params.row)}
-        />,
-        <GridActionsCellItem
-          icon={<DeleteIcon />}
-          label="Delete"
-          onClick={() => handleDeleteUser(params.id as number)}
-        />,
-      ],
+      getActions: (params: GridRowParams) => {
+        const actions = [];
+
+        if (canPerformAction('edit')) {
+          actions.push(
+            <GridActionsCellItem
+              icon={<EditIcon />}
+              label="Edit"
+              onClick={() => handleOpenUserDialog(params.row)}
+            />
+          );
+        }
+
+        // Admin-only password reset action
+        if (getUserPrivilegeLevel() >= 4) {
+          actions.push(
+            <GridActionsCellItem
+              icon={<PasswordResetIcon />}
+              label="Reset Password"
+              onClick={() => handleResetPassword(params.id as number, params.row.username)}
+              showInMenu
+            />
+          );
+        }
+
+        if (canPerformAction('delete')) {
+          actions.push(
+            <GridActionsCellItem
+              icon={<DeleteIcon />}
+              label="Delete"
+              onClick={() => handleDeleteUser(params.id as number)}
+              showInMenu
+            />
+          );
+        }
+
+        return actions;
+      },
     },
   ];
 
@@ -621,20 +810,32 @@ const StaffPage: React.FC = () => {
             Staff Management
           </Typography>
           <Stack direction="row" spacing={2}>
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpenUserDialog()}
-            >
-              Add User
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpenStaffDialog()}
-            >
-              Add Staff
-            </Button>
+            <ManagerOrAbove>
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenUserDialog()}
+              >
+                Add User
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenStaffDialog()}
+              >
+                Add Staff
+              </Button>
+            </ManagerOrAbove>
+            <RoleBasedAccess requiredPrivilegeLevel={2}>
+              <Button
+                variant="outlined"
+                startIcon={<VisibilityIcon />}
+                onClick={() => setTabValue(0)}
+                color={tabValue === 0 ? 'primary' : 'inherit'}
+              >
+                View Staff
+              </Button>
+            </RoleBasedAccess>
           </Stack>
         </Stack>
 
@@ -735,9 +936,7 @@ const StaffPage: React.FC = () => {
 
           {/* Leave Requests Tab */}
           <TabPanel value={tabValue} index={3}>
-            <Alert severity="info">
-              Leave request management coming soon...
-            </Alert>
+            <StaffLeaveManager staffProfiles={staffProfiles} onUpdate={loadData} />
           </TabPanel>
         </Paper>
 
@@ -753,7 +952,7 @@ const StaffPage: React.FC = () => {
           </DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ mt: 1 }}>
-              <FormControl fullWidth>
+              <FormControl fullWidth error={!!formErrors.userId}>
                 <InputLabel>User *</InputLabel>
                 <Select
                   value={staffFormData.userId || ''}
@@ -772,6 +971,7 @@ const StaffPage: React.FC = () => {
                     // Clear validation errors for auto-populated fields
                     setFormErrors({
                       ...formErrors,
+                      userId: '',
                       firstName: '',
                       lastName: '',
                       email: ''
@@ -779,7 +979,7 @@ const StaffPage: React.FC = () => {
                   }}
                 >
                   <MenuItem value="">
-                    <em>Select a user (optional - will auto-fill name and email)</em>
+                    <em>Select a user (required)</em>
                   </MenuItem>
                   {Array.isArray(users) && users.map((user) => (
                     <MenuItem key={user.id} value={user.id}>
@@ -787,6 +987,11 @@ const StaffPage: React.FC = () => {
                     </MenuItem>
                   ))}
                 </Select>
+                {formErrors.userId && (
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.5 }}>
+                    {formErrors.userId}
+                  </Typography>
+                )}
               </FormControl>
 
               <Stack direction="row" spacing={2}>
@@ -882,7 +1087,7 @@ const StaffPage: React.FC = () => {
                 <FormControl fullWidth error={!!formErrors.position}>
                   <InputLabel>Position *</InputLabel>
                   <Select
-                    value={staffFormData.position || 'carer'}
+                    value={staffFormData.position || 'care_worker'}
                     onChange={(e) => {
                       setStaffFormData({ ...staffFormData, position: e.target.value as any });
                       if (formErrors.position) {
@@ -890,12 +1095,14 @@ const StaffPage: React.FC = () => {
                       }
                     }}
                   >
-                    <MenuItem value="carer">Carer</MenuItem>
-                    <MenuItem value="nurse">Registered Nurse</MenuItem>
+                    <MenuItem value="care_worker">Care Worker</MenuItem>
+                    <MenuItem value="registered_nurse">Registered Nurse</MenuItem>
+                    <MenuItem value="social_worker">Social Worker</MenuItem>
+                    <MenuItem value="support_worker">Support Worker</MenuItem>
+                    <MenuItem value="team_leader">Team Leader</MenuItem>
                     <MenuItem value="supervisor">Supervisor</MenuItem>
+                    <MenuItem value="coordinator">Coordinator</MenuItem>
                     <MenuItem value="manager">Manager</MenuItem>
-                    <MenuItem value="admin">Administrative Assistant</MenuItem>
-                    <MenuItem value="coordinator">Care Coordinator</MenuItem>
                   </Select>
                   {formErrors.position && (
                     <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.5 }}>
@@ -966,7 +1173,22 @@ const StaffPage: React.FC = () => {
               <TextField
                 label="Address Line 1"
                 value={staffFormData.addressLine1 || ''}
-                onChange={(e) => setStaffFormData({ ...staffFormData, addressLine1: e.target.value })}
+                onChange={(e) => {
+                  setStaffFormData({ ...staffFormData, addressLine1: e.target.value });
+                  if (formErrors.addressLine1) {
+                    setFormErrors({ ...formErrors, addressLine1: '' });
+                  }
+                }}
+                fullWidth
+                required
+                error={!!formErrors.addressLine1}
+                helperText={formErrors.addressLine1}
+              />
+
+              <TextField
+                label="Address Line 2 (Optional)"
+                value={staffFormData.addressLine2 || ''}
+                onChange={(e) => setStaffFormData({ ...staffFormData, addressLine2: e.target.value })}
                 fullWidth
               />
 
@@ -974,21 +1196,133 @@ const StaffPage: React.FC = () => {
                 <TextField
                   label="City"
                   value={staffFormData.city || ''}
-                  onChange={(e) => setStaffFormData({ ...staffFormData, city: e.target.value })}
+                  onChange={(e) => {
+                    setStaffFormData({ ...staffFormData, city: e.target.value });
+                    if (formErrors.city) {
+                      setFormErrors({ ...formErrors, city: '' });
+                    }
+                  }}
                   fullWidth
+                  required
+                  error={!!formErrors.city}
+                  helperText={formErrors.city}
                 />
                 <TextField
                   label="State"
                   value={staffFormData.state || ''}
-                  onChange={(e) => setStaffFormData({ ...staffFormData, state: e.target.value })}
+                  onChange={(e) => {
+                    setStaffFormData({ ...staffFormData, state: e.target.value });
+                    if (formErrors.state) {
+                      setFormErrors({ ...formErrors, state: '' });
+                    }
+                  }}
                   fullWidth
+                  required
+                  error={!!formErrors.state}
+                  helperText={formErrors.state}
                 />
                 <TextField
                   label="Postal Code"
                   value={staffFormData.postalCode || ''}
-                  onChange={(e) => setStaffFormData({ ...staffFormData, postalCode: e.target.value })}
+                  onChange={(e) => {
+                    setStaffFormData({ ...staffFormData, postalCode: e.target.value });
+                    if (formErrors.postalCode) {
+                      setFormErrors({ ...formErrors, postalCode: '' });
+                    }
+                  }}
                   fullWidth
+                  required
+                  error={!!formErrors.postalCode}
+                  helperText={formErrors.postalCode}
                 />
+              </Stack>
+
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Employee ID"
+                  value={staffFormData.employeeId || ''}
+                  onChange={(e) => {
+                    setStaffFormData({ ...staffFormData, employeeId: e.target.value });
+                    if (formErrors.employeeId) {
+                      setFormErrors({ ...formErrors, employeeId: '' });
+                    }
+                  }}
+                  fullWidth
+                  required
+                  error={!!formErrors.employeeId}
+                  helperText={formErrors.employeeId || "Unique employee identifier"}
+                />
+                <TextField
+                  label="Hourly Rate ($)"
+                  type="number"
+                  value={staffFormData.hourlyRate || ''}
+                  onChange={(e) => {
+                    setStaffFormData({ ...staffFormData, hourlyRate: Number(e.target.value) });
+                    if (formErrors.hourlyRate) {
+                      setFormErrors({ ...formErrors, hourlyRate: '' });
+                    }
+                  }}
+                  fullWidth
+                  error={!!formErrors.hourlyRate}
+                  helperText={formErrors.hourlyRate}
+                  inputProps={{ min: 0, step: 0.01 }}
+                />
+              </Stack>
+
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Qualifications"
+                  value={staffFormData.qualifications || ''}
+                  onChange={(e) => setStaffFormData({ ...staffFormData, qualifications: e.target.value })}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  helperText="Education, degrees, etc."
+                />
+                <TextField
+                  label="Certifications"
+                  value={staffFormData.certifications || ''}
+                  onChange={(e) => setStaffFormData({ ...staffFormData, certifications: e.target.value })}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  helperText="Professional certifications"
+                />
+              </Stack>
+
+              <TextField
+                label="Preferred Hours Per Week"
+                type="number"
+                value={staffFormData.preferredHoursPerWeek || ''}
+                onChange={(e) => setStaffFormData({ ...staffFormData, preferredHoursPerWeek: Number(e.target.value) })}
+                fullWidth
+                inputProps={{ min: 0, max: 80 }}
+                helperText="Desired weekly working hours"
+              />
+
+              <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Availability</Typography>
+              <Stack direction="row" spacing={3}>
+                <FormControl component="fieldset">
+                  <Typography variant="body2" gutterBottom>Available Weekdays</Typography>
+                  <Switch
+                    checked={staffFormData.availableWeekdays || false}
+                    onChange={(e) => setStaffFormData({ ...staffFormData, availableWeekdays: e.target.checked })}
+                  />
+                </FormControl>
+                <FormControl component="fieldset">
+                  <Typography variant="body2" gutterBottom>Available Weekends</Typography>
+                  <Switch
+                    checked={staffFormData.availableWeekends || false}
+                    onChange={(e) => setStaffFormData({ ...staffFormData, availableWeekends: e.target.checked })}
+                  />
+                </FormControl>
+                <FormControl component="fieldset">
+                  <Typography variant="body2" gutterBottom>Available Nights</Typography>
+                  <Switch
+                    checked={staffFormData.availableNights || false}
+                    onChange={(e) => setStaffFormData({ ...staffFormData, availableNights: e.target.checked })}
+                  />
+                </FormControl>
               </Stack>
 
               <Typography variant="h6">Emergency Contact</Typography>
@@ -996,14 +1330,30 @@ const StaffPage: React.FC = () => {
                 <TextField
                   label="Emergency Contact Name"
                   value={staffFormData.emergencyContactName || ''}
-                  onChange={(e) => setStaffFormData({ ...staffFormData, emergencyContactName: e.target.value })}
+                  onChange={(e) => {
+                    setStaffFormData({ ...staffFormData, emergencyContactName: e.target.value });
+                    if (formErrors.emergencyContactName) {
+                      setFormErrors({ ...formErrors, emergencyContactName: '' });
+                    }
+                  }}
                   fullWidth
+                  required
+                  error={!!formErrors.emergencyContactName}
+                  helperText={formErrors.emergencyContactName}
                 />
                 <TextField
                   label="Emergency Contact Phone"
                   value={staffFormData.emergencyContactPhone || ''}
-                  onChange={(e) => setStaffFormData({ ...staffFormData, emergencyContactPhone: e.target.value })}
+                  onChange={(e) => {
+                    setStaffFormData({ ...staffFormData, emergencyContactPhone: e.target.value });
+                    if (formErrors.emergencyContactPhone) {
+                      setFormErrors({ ...formErrors, emergencyContactPhone: '' });
+                    }
+                  }}
                   fullWidth
+                  required
+                  error={!!formErrors.emergencyContactPhone}
+                  helperText={formErrors.emergencyContactPhone}
                 />
               </Stack>
               <TextField
@@ -1063,17 +1413,24 @@ const StaffPage: React.FC = () => {
                 onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
                 fullWidth
                 required={!selectedUser}
-                helperText={selectedUser ? 'Leave blank to keep current password' : 'Required for new users'}
+                helperText={
+                  selectedUser
+                    ? getUserPrivilegeLevel() >= 4
+                      ? 'As admin, you can reset any user\'s password without knowing current password'
+                      : 'Leave blank to keep current password'
+                    : 'Required for new users'
+                }
               />
               <FormControl fullWidth>
-                <InputLabel>Role</InputLabel>
+                <InputLabel>System Role</InputLabel>
                 <Select
-                  value={userFormData.roles?.[0] || 'Carer'}
+                  value={userFormData.roles?.[0] || 'Staff'}
                   onChange={(e) => setUserFormData({ ...userFormData, roles: [e.target.value] })}
                 >
-                  <MenuItem value="Carer">Carer</MenuItem>
-                  <MenuItem value="Care_Coordinator">Care Coordinator</MenuItem>
-                  <MenuItem value="Admin">Admin</MenuItem>
+                  <MenuItem value="Admin">Admin (Full System Access)</MenuItem>
+                  <MenuItem value="Manager">Manager (Staff & Operations)</MenuItem>
+                  <MenuItem value="Care_Coordinator">Care Coordinator (Client Management)</MenuItem>
+                  <MenuItem value="Staff">Staff (Basic Access)</MenuItem>
                 </Select>
               </FormControl>
             </Stack>

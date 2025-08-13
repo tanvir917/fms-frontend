@@ -37,6 +37,7 @@ import dayjs from 'dayjs';
 import { rosterService, Shift, ShiftSwap, DropdownOption } from '../../services/rosterService';
 import { useAuth } from '../../contexts/AuthContext';
 import PageLayout from '../../components/Layout/PageLayout';
+import RoleBasedAccess, { AdminOnly, ManagerOrAbove } from '../../components/Auth/RoleBasedAccess';
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -61,6 +62,57 @@ function TabPanel(props: TabPanelProps) {
 
 const RosterPage: React.FC = () => {
     const { user } = useAuth();
+
+    // Helper function to get user privilege level
+    const getUserPrivilegeLevel = () => {
+        console.log('Debug - User object:', user);
+        console.log('Debug - User roles:', user?.roles);
+        console.log('Debug - User type:', user?.user_type);
+
+        if (!user) {
+            console.log('Debug - No user found, returning 0');
+            return 0;
+        }
+
+        const rolePrivileges: { [key: string]: number } = {
+            'Admin': 4,
+            'Manager': 3,
+            'Care_Coordinator': 2,
+            'Staff': 1
+        };
+
+        // Try to use roles array first, fallback to user_type
+        let privilegeLevel = 0;
+
+        if (user.roles && user.roles.length > 0) {
+            privilegeLevel = Math.max(...user.roles.map(role => rolePrivileges[role] || 0));
+            console.log('Debug - Used roles array, privilege level:', privilegeLevel);
+        } else if (user.user_type) {
+            privilegeLevel = rolePrivileges[user.user_type] || 0;
+            console.log('Debug - Used user_type fallback, privilege level:', privilegeLevel);
+        }
+
+        console.log('Debug - Final calculated privilege level:', privilegeLevel);
+        return privilegeLevel;
+    };    // Helper function to check if user can perform action
+    const canPerformAction = (action: string) => {
+        const privilegeLevel = getUserPrivilegeLevel();
+
+        switch (action) {
+            case 'create':
+                return privilegeLevel >= 3; // Manager or above
+            case 'edit':
+                return privilegeLevel >= 3; // Manager or above
+            case 'delete':
+                return privilegeLevel >= 3; // Manager or above
+            case 'view':
+                return privilegeLevel >= 1; // All authenticated users
+            case 'swap':
+                return privilegeLevel >= 1; // All authenticated users can request swaps
+            default:
+                return false;
+        }
+    };
     const [tabValue, setTabValue] = useState(0);
     const [shifts, setShifts] = useState<Shift[]>([]);
     const [shiftSwaps, setShiftSwaps] = useState<ShiftSwap[]>([]);
@@ -318,18 +370,32 @@ const RosterPage: React.FC = () => {
             type: 'actions',
             headerName: 'Actions',
             width: 150,
-            getActions: (params: GridRowParams) => [
-                <GridActionsCellItem
-                    icon={<EditIcon />}
-                    label="Edit"
-                    onClick={() => handleOpenShiftDialog(params.row)}
-                />,
-                <GridActionsCellItem
-                    icon={<DeleteIcon />}
-                    label="Delete"
-                    onClick={() => handleDeleteShift(params.id as number)}
-                />,
-            ],
+            getActions: (params: GridRowParams) => {
+                const actions = [];
+
+                if (canPerformAction('edit')) {
+                    actions.push(
+                        <GridActionsCellItem
+                            icon={<EditIcon />}
+                            label="Edit"
+                            onClick={() => handleOpenShiftDialog(params.row)}
+                        />
+                    );
+                }
+
+                if (canPerformAction('delete')) {
+                    actions.push(
+                        <GridActionsCellItem
+                            icon={<DeleteIcon />}
+                            label="Delete"
+                            onClick={() => handleDeleteShift(params.id as number)}
+                            showInMenu
+                        />
+                    );
+                }
+
+                return actions;
+            },
         },
     ];
 
@@ -373,15 +439,22 @@ const RosterPage: React.FC = () => {
             type: 'actions',
             headerName: 'Actions',
             width: 100,
-            getActions: (params: GridRowParams) => [
-                ...(params.row.status === 'pending' ? [
-                    <GridActionsCellItem
-                        icon={<EditIcon />}
-                        label="Approve"
-                        onClick={() => handleApproveSwap(params.id as number)}
-                    />
-                ] : [])
-            ],
+            getActions: (params: GridRowParams) => {
+                const actions = [];
+
+                // Only managers and above can approve swap requests
+                if (params.row.status === 'pending' && canPerformAction('edit')) {
+                    actions.push(
+                        <GridActionsCellItem
+                            icon={<EditIcon />}
+                            label="Approve"
+                            onClick={() => handleApproveSwap(params.id as number)}
+                        />
+                    );
+                }
+
+                return actions;
+            },
         },
     ];
 
@@ -426,13 +499,15 @@ const RosterPage: React.FC = () => {
                     <TabPanel value={tabValue} index={0}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                             <Typography variant="h6">Scheduled Shifts</Typography>
-                            <Button
-                                variant="contained"
-                                startIcon={<AddIcon />}
-                                onClick={() => handleOpenShiftDialog()}
-                            >
-                                Add Shift
-                            </Button>
+                            <ManagerOrAbove>
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AddIcon />}
+                                    onClick={() => handleOpenShiftDialog()}
+                                >
+                                    Add Shift
+                                </Button>
+                            </ManagerOrAbove>
                         </Box>
                         <Box sx={{ height: 500, width: '100%' }}>
                             <DataGrid
@@ -474,13 +549,15 @@ const RosterPage: React.FC = () => {
                     <TabPanel value={tabValue} index={1}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                             <Typography variant="h6">Shift Swap Requests</Typography>
-                            <Button
-                                variant="contained"
-                                startIcon={<AddIcon />}
-                                onClick={() => handleOpenSwapDialog()}
-                            >
-                                Request Swap
-                            </Button>
+                            <RoleBasedAccess requiredPrivilegeLevel={1}>
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AddIcon />}
+                                    onClick={() => handleOpenSwapDialog()}
+                                >
+                                    Request Swap
+                                </Button>
+                            </RoleBasedAccess>
                         </Box>
                         <Box sx={{ height: 500, width: '100%' }}>
                             <DataGrid

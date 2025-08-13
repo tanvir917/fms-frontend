@@ -1,193 +1,354 @@
-import api from './api';
+import { dotnetClientApi } from './api';
+
+// Define enums to match .NET backend exactly
+export enum CareLevel {
+  Low = 0,
+  Medium = 1,
+  High = 2,
+  Respite = 3,
+  Palliative = 4
+}
+
+export enum ClientStatus {
+  Active = 0,
+  Inactive = 1,
+  Discharged = 2,
+  Deceased = 3,
+  OnHold = 4
+}
 
 export interface Client {
   id: number;
-  first_name: string;
-  last_name: string;
-  full_name?: string;
-  date_of_birth: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  preferredName?: string;
+  fullName?: string;
+  dateOfBirth: string;
   age?: number;
-  gender: 'M' | 'F' | 'O' | 'P';
-  phone_number?: string;
+  gender?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  phoneNumber?: string;
   email?: string;
-  address_line_1: string;
-  address_line_2?: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
-  care_level: 'low' | 'medium' | 'high' | 'respite' | 'palliative';
-  medical_conditions?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  medicaidNumber?: string;
+  medicareNumber?: string;
+  socialSecurityNumber?: string;
+  careLevel: CareLevel;
+  status: ClientStatus;
+  admissionDate?: string;
+  dischargeDate?: string;
+  medicalConditions?: string;
   medications?: string;
   allergies?: string;
-  dietary_requirements?: string;
-  special_requirements?: string;
-  mobility_notes?: string;
-  emergency_contact_name: string;
-  emergency_contact_phone: string;
-  emergency_contact_relationship: string;
-  status: 'active' | 'inactive' | 'waiting_list' | 'discharged';
-  is_active: boolean;
-  current_care_plan?: CarePlan;
-  notes_count?: number;
-  documents_count?: number;
-  created_at: string;
-  updated_at: string;
+  specialInstructions?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
+  carePlans?: CarePlan[];
+  documents?: ClientDocument[];
+  clientNotes?: ClientNote[];
 }
 
 export interface CarePlan {
   id: number;
-  client: number;
-  client_name?: string;
-  plan_type: 'initial' | 'ongoing' | 'respite' | 'palliative' | 'transitional';
+  clientId: number;
   title: string;
-  description: string;
-  care_goals: string;
-  intervention_strategies: string;
-  support_requirements: string;
-  risk_assessments?: string;
-  start_date: string;
-  end_date?: string;
-  review_date: string;
-  status: 'draft' | 'active' | 'completed' | 'cancelled';
-  is_active: boolean;
-  created_by?: number;
-  created_by_name?: string;
-  approved_by?: number;
-  approved_by_name?: string;
-  created_at: string;
-  updated_at: string;
+  description?: string;
+  goals?: string;
+  interventionStrategies?: string;
+  startDate: string;
+  endDate?: string;
+  reviewDate?: string;
+  status: 'Draft' | 'Active' | 'Inactive' | 'Completed' | 'Discontinued' | number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface ClientNote {
   id: number;
-  client: number;
-  client_name?: string;
-  care_plan?: number;
-  note_type: 'general' | 'medical' | 'behavioral' | 'incident' | 'care_update';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  clientId: number;
   title: string;
   content: string;
-  is_confidential: boolean;
-  created_by?: number;
-  created_by_name?: string;
-  created_at: string;
-  updated_at: string;
+  noteType: 'General' | 'Medical' | 'Behavioral' | 'Care' | 'Administrative';
+  noteDate: string;
+  isPrivate: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface ClientDocument {
   id: number;
-  client: number;
-  client_name?: string;
-  care_plan?: number;
-  document_type: string;
+  clientId: number;
   title: string;
   description?: string;
-  file: string;
-  file_size?: number;
-  uploaded_by?: number;
-  uploaded_by_name?: string;
-  uploaded_at: string;
+  documentType: 'Medical' | 'Legal' | 'Insurance' | 'Personal' | 'Care' | 'Assessment' | 'Other';
+  filePath: string;
+  fileName: string;
+  fileSize?: string;
+  contentType?: string;
+  uploadDate: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
+export interface CreateClientDto {
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  preferredName?: string;
+  dateOfBirth: string;
+  gender?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  phoneNumber?: string;
+  email?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  medicaidNumber?: string;
+  medicareNumber?: string;
+  socialSecurityNumber?: string;
+  careLevel: CareLevel;
+  status: ClientStatus;
+  admissionDate?: string;
+  medicalConditions?: string;
+  medications?: string;
+  allergies?: string;
+  specialInstructions?: string;
+  notes?: string;
+}
+
+export interface UpdateClientDto {
+  firstName?: string;
+  lastName?: string;
+  middleName?: string;
+  preferredName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  phoneNumber?: string;
+  email?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  medicaidNumber?: string;
+  medicareNumber?: string;
+  socialSecurityNumber?: string;
+  careLevel?: CareLevel;
+  status?: ClientStatus;
+  admissionDate?: string;
+  dischargeDate?: string;
+  medicalConditions?: string;
+  medications?: string;
+  allergies?: string;
+  specialInstructions?: string;
+  notes?: string;
+}
+
+export interface ClientSearchDto {
+  name?: string;
+  email?: string;
+  phoneNumber?: string;
+  careLevel?: CareLevel;
+  status?: ClientStatus;
+  admissionDateFrom?: string;
+  admissionDateTo?: string;
+  ageFrom?: number;
+  ageTo?: number;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDescending?: boolean;
+}
+
+export interface ClientStatsDto {
+  totalClients: number;
+  activeClients: number;
+  inactiveClients: number;
+  dischargedClients: number;
+  clientsByCareLevel: Record<string, number>;
+  clientsByStatus: Record<string, number>;
+  newClientsThisMonth: number;
+  dischargedThisMonth: number;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data?: T;
+  errors?: string[];
+}
+
+export interface PaginatedResponse<T> {
+  results: T[];
+  count: number;
 }
 
 export const clientService = {
-  // Client CRUD operations
-  getClients: async (params?: any) => {
-    const response = await api.get('/clients/', { params });
-    return response.data;
+  // Client CRUD operations - Updated for .NET API
+  getClients: async (params?: ClientSearchDto): Promise<PaginatedResponse<Client>> => {
+    const response = await dotnetClientApi.get<ApiResponse<PaginatedResponse<Client>>>('/clients', { params });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to fetch clients');
   },
 
-  getClient: async (id: number) => {
-    const response = await api.get(`/clients/${id}/`);
-    return response.data;
+  getClient: async (id: number): Promise<Client> => {
+    const response = await dotnetClientApi.get<ApiResponse<Client>>(`/clients/${id}`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to fetch client');
   },
 
-  createClient: async (clientData: Partial<Client>) => {
-    const response = await api.post('/clients/', clientData);
-    return response.data;
+  createClient: async (clientData: CreateClientDto): Promise<Client> => {
+    const response = await dotnetClientApi.post<ApiResponse<Client>>('/clients', clientData);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to create client');
   },
 
-  updateClient: async (id: number, clientData: Partial<Client>) => {
-    const response = await api.put(`/clients/${id}/`, clientData);
-    return response.data;
+  updateClient: async (id: number, clientData: UpdateClientDto): Promise<Client> => {
+    const response = await dotnetClientApi.put<ApiResponse<Client>>(`/clients/${id}`, clientData);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update client');
   },
 
-  deleteClient: async (id: number) => {
-    await api.delete(`/clients/${id}/`);
+  deleteClient: async (id: number): Promise<void> => {
+    const response = await dotnetClientApi.delete<ApiResponse<void>>(`/clients/${id}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete client');
+    }
   },
 
-  searchClients: async (query: string, filters?: any) => {
-    const params = { q: query, ...filters };
-    const response = await api.get('/clients/search/', { params });
-    return response.data;
+  getClientStats: async (): Promise<ClientStatsDto> => {
+    const response = await dotnetClientApi.get<ApiResponse<ClientStatsDto>>('/clients/stats');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to fetch client stats');
   },
 
-  getClientStats: async () => {
-    const response = await api.get('/clients/stats/');
-    return response.data;
+  // Care Plan operations - Updated for .NET API
+  getCarePlans: async (clientId: number): Promise<CarePlan[]> => {
+    const response = await dotnetClientApi.get<ApiResponse<CarePlan[]>>(`/clients/${clientId}/careplans`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to fetch care plans');
   },
 
-  // Care Plan operations
-  getCarePlans: async (clientId: number) => {
-    const response = await api.get(`/clients/${clientId}/care-plans/`);
-    return response.data;
+  createCarePlan: async (clientId: number, carePlanData: any): Promise<CarePlan> => {
+    const response = await dotnetClientApi.post<ApiResponse<CarePlan>>(`/clients/${clientId}/careplans`, carePlanData);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to create care plan');
   },
 
-  createCarePlan: async (clientId: number, carePlanData: Partial<CarePlan>) => {
-    const response = await api.post(`/clients/${clientId}/care-plans/`, carePlanData);
-    return response.data;
+  updateCarePlan: async (clientId: number, planId: number, carePlanData: any): Promise<CarePlan> => {
+    const response = await dotnetClientApi.put<ApiResponse<CarePlan>>(`/clients/${clientId}/careplans/${planId}`, carePlanData);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update care plan');
   },
 
-  updateCarePlan: async (clientId: number, planId: number, carePlanData: Partial<CarePlan>) => {
-    const response = await api.put(`/clients/${clientId}/care-plans/${planId}/`, carePlanData);
-    return response.data;
+  deleteCarePlan: async (clientId: number, planId: number): Promise<void> => {
+    const response = await dotnetClientApi.delete<ApiResponse<void>>(`/clients/${clientId}/careplans/${planId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete care plan');
+    }
   },
 
-  deleteCarePlan: async (clientId: number, planId: number) => {
-    await api.delete(`/clients/${clientId}/care-plans/${planId}/`);
+  // Client Notes operations - Updated for .NET API
+  getClientNotes: async (clientId: number): Promise<ClientNote[]> => {
+    const response = await dotnetClientApi.get<ApiResponse<ClientNote[]>>(`/clients/${clientId}/notes`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to fetch client notes');
   },
 
-  activateCarePlan: async (clientId: number, planId: number) => {
-    const response = await api.post(`/clients/${clientId}/care-plans/${planId}/activate/`);
-    return response.data;
+  createClientNote: async (clientId: number, noteData: any): Promise<ClientNote> => {
+    const response = await dotnetClientApi.post<ApiResponse<ClientNote>>(`/clients/${clientId}/notes`, noteData);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to create client note');
   },
 
-  // Client Notes operations
-  getClientNotes: async (clientId: number) => {
-    const response = await api.get(`/clients/${clientId}/notes/`);
-    return response.data;
+  updateClientNote: async (clientId: number, noteId: number, noteData: any): Promise<ClientNote> => {
+    const response = await dotnetClientApi.put<ApiResponse<ClientNote>>(`/clients/${clientId}/notes/${noteId}`, noteData);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to update client note');
   },
 
-  createClientNote: async (clientId: number, noteData: Partial<ClientNote>) => {
-    const response = await api.post(`/clients/${clientId}/notes/`, noteData);
-    return response.data;
+  deleteClientNote: async (clientId: number, noteId: number): Promise<void> => {
+    const response = await dotnetClientApi.delete<ApiResponse<void>>(`/clients/${clientId}/notes/${noteId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete client note');
+    }
   },
 
-  updateClientNote: async (clientId: number, noteId: number, noteData: Partial<ClientNote>) => {
-    const response = await api.put(`/clients/${clientId}/notes/${noteId}/`, noteData);
-    return response.data;
+  // Document operations - Updated for .NET API
+  getClientDocuments: async (clientId: number): Promise<ClientDocument[]> => {
+    const response = await dotnetClientApi.get<ApiResponse<ClientDocument[]>>(`/clients/${clientId}/documents`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to fetch client documents');
   },
 
-  deleteClientNote: async (clientId: number, noteId: number) => {
-    await api.delete(`/clients/${clientId}/notes/${noteId}/`);
-  },
-
-  // Document operations
-  getClientDocuments: async (clientId: number) => {
-    const response = await api.get(`/clients/${clientId}/documents/`);
-    return response.data;
-  },
-
-  uploadClientDocument: async (clientId: number, documentData: FormData) => {
-    const response = await api.post(`/clients/${clientId}/documents/`, documentData, {
+  uploadClientDocument: async (clientId: number, documentData: FormData): Promise<ClientDocument> => {
+    const response = await dotnetClientApi.post<ApiResponse<ClientDocument>>(`/clients/${clientId}/documents/upload`, documentData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return response.data;
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to upload document');
   },
 
-  deleteClientDocument: async (clientId: number, documentId: number) => {
-    await api.delete(`/clients/${clientId}/documents/${documentId}/`);
+  deleteClientDocument: async (clientId: number, documentId: number): Promise<void> => {
+    const response = await dotnetClientApi.delete<ApiResponse<void>>(`/clients/${clientId}/documents/${documentId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete document');
+    }
+  },
+
+  downloadClientDocument: async (clientId: number, documentId: number): Promise<Blob> => {
+    const response = await dotnetClientApi.get(`/clients/${clientId}/documents/${documentId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
   },
 };

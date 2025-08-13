@@ -19,8 +19,8 @@ const PageLayout: React.FC<PageLayoutProps> = ({
                 flexGrow: 1,
                 py: 3,
                 mt: 8, // Add margin top to account for AppBar (64px default)
-                width: { sm: `calc(100% - 240px)` }, // Account for sidebar
-                ml: { sm: `240px` }, // Account for sidebar
+                width: { sm: `calc(100% - 260px)` }, // Account for wider sidebar
+                ml: { sm: `260px` }, // Account for wider sidebar
                 minHeight: 'calc(100vh - 64px)', // Full height minus AppBar
             }}
         >

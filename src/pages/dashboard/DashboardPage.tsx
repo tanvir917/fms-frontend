@@ -20,10 +20,13 @@ import {
     TrendingUp,
     SupervisorAccount as SupervisorAccountIcon,
     ArrowForward as ArrowForwardIcon,
+    AdminPanelSettings,
+    Assignment,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PageLayout from '../../components/Layout/PageLayout';
+import RoleBasedAccess, { AdminOnly, ManagerOrAbove, CoordinatorOrAbove } from '../../components/Auth/RoleBasedAccess';
 import { clientService } from '../../services/clientService';
 import { rosterService } from '../../services/rosterService';
 import { staffService } from '../../services/staffService';
@@ -51,7 +54,25 @@ const DashboardPage: React.FC = () => {
         total_staff: 0,
     });
 
-    const isAdmin = user && user.user_type === 'admin';
+    // Helper function to get user's privilege level
+    const getUserPrivilegeLevel = (): number => {
+        if (!user) return 0;
+
+        const userRoles = user.roles || [user.user_type];
+
+        if (userRoles.includes('Admin')) return 4;
+        if (userRoles.includes('Manager')) return 3;
+        if (userRoles.includes('Care_Coordinator')) return 2;
+        if (userRoles.includes('Staff')) return 1;
+
+        // Legacy role support
+        if (userRoles.includes('Administrator') || userRoles.includes('admin')) return 4;
+        if (userRoles.includes('Supervisor') || userRoles.includes('manager')) return 3;
+
+        return 1; // Default to basic staff level
+    };
+
+    const privilegeLevel = getUserPrivilegeLevel();
 
     const dashboardCards = [
         {
@@ -60,7 +81,15 @@ const DashboardPage: React.FC = () => {
             icon: <People sx={{ fontSize: 40 }} />,
             path: '/clients',
             color: theme.palette.primary.main,
-            roles: ['admin', 'manager', 'staff', 'supervisor'],
+            minPrivilegeLevel: 1, // All users
+        },
+        {
+            title: 'Staff Management',
+            description: 'Manage staff profiles and user accounts',
+            icon: <SupervisorAccountIcon sx={{ fontSize: 40 }} />,
+            path: '/staff',
+            color: theme.palette.warning.main,
+            minPrivilegeLevel: 3, // Manager and above
         },
         {
             title: 'Roster',
@@ -68,7 +97,7 @@ const DashboardPage: React.FC = () => {
             icon: <Schedule sx={{ fontSize: 40 }} />,
             path: '/roster',
             color: theme.palette.secondary.main,
-            roles: ['admin', 'manager', 'staff', 'supervisor'],
+            minPrivilegeLevel: 2, // Care Coordinator and above
         },
         {
             title: 'Progress Notes',
@@ -76,7 +105,7 @@ const DashboardPage: React.FC = () => {
             icon: <Note sx={{ fontSize: 40 }} />,
             path: '/notes',
             color: theme.palette.info.main,
-            roles: ['admin', 'manager', 'staff', 'supervisor'],
+            minPrivilegeLevel: 1, // All users
         },
         {
             title: 'Billing',
@@ -84,7 +113,7 @@ const DashboardPage: React.FC = () => {
             icon: <Receipt sx={{ fontSize: 40 }} />,
             path: '/billing',
             color: theme.palette.success.main,
-            roles: ['admin', 'manager'],
+            minPrivilegeLevel: 3, // Manager and above
         },
         {
             title: 'Reports',
@@ -92,7 +121,15 @@ const DashboardPage: React.FC = () => {
             icon: <TrendingUp sx={{ fontSize: 40 }} />,
             path: '/reports',
             color: theme.palette.warning.main,
-            roles: ['admin', 'manager'],
+            minPrivilegeLevel: 3, // Manager and above
+        },
+        {
+            title: 'System Admin',
+            description: 'System configuration and administration',
+            icon: <AdminPanelSettings sx={{ fontSize: 40 }} />,
+            path: '/admin',
+            color: theme.palette.error.main,
+            minPrivilegeLevel: 4, // Admin only
         },
     ];
 
@@ -171,13 +208,13 @@ const DashboardPage: React.FC = () => {
     };
 
     useEffect(() => {
-        if (isAdmin) {
+        if (privilegeLevel >= 3) { // Manager and above
             loadStaffStats();
         }
-    }, [isAdmin]);
+    }, [privilegeLevel]);
 
     const filteredCards = dashboardCards.filter(card =>
-        !user || card.roles.includes(user.user_type)
+        privilegeLevel >= card.minPrivilegeLevel
     );
 
     const getGreeting = () => {
@@ -212,7 +249,10 @@ const DashboardPage: React.FC = () => {
                         {getGreeting()}, {user.first_name || user.username}
                     </Typography>
                     <Typography variant="h6" color="text.secondary">
-                        Welcome to CareManagement System
+                        Welcome to Care Management System
+                    </Typography>
+                    <Typography variant="body2" color="primary" sx={{ fontWeight: 'medium' }}>
+                        {user.roles?.[0] || user.user_type} Access Level
                     </Typography>
                 </Box>
 
@@ -347,13 +387,13 @@ const DashboardPage: React.FC = () => {
                     </Box>
                 </Box>
 
-                {/* Staff Management Card - Admin Only */}
-                {isAdmin && (
+                {/* Staff Management Card - Manager and Above */}
+                <ManagerOrAbove>
                     <Card>
                         <CardContent>
                             <Typography variant="h6" gutterBottom>
                                 <SupervisorAccountIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                                Staff Management
+                                Staff Management Overview
                             </Typography>
                             <Stack spacing={1}>
                                 <Typography variant="h4">{staffStats.total_staff || 0}</Typography>
@@ -370,7 +410,7 @@ const DashboardPage: React.FC = () => {
                             </Stack>
                         </CardContent>
                     </Card>
-                )}
+                </ManagerOrAbove>
 
                 {/* Quick Actions */}
                 <Box>

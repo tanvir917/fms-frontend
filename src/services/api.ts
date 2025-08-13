@@ -5,6 +5,7 @@ const USE_DOTNET_APIS = import.meta.env.VITE_USE_DOTNET_APIS === 'true';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const DOTNET_AUTH_URL = import.meta.env.VITE_DOTNET_AUTH_URL || 'http://localhost:5001/api';
 const DOTNET_STAFF_URL = import.meta.env.VITE_DOTNET_STAFF_URL || 'http://localhost:5002/api';
+const DOTNET_CLIENT_URL = import.meta.env.VITE_DOTNET_CLIENT_URL || 'http://localhost:5004/api';
 
 // Create different API instances for different services
 const createApiInstance = (baseURL: string) => {
@@ -23,6 +24,7 @@ const djangoApi = createApiInstance(API_BASE_URL);
 // .NET Microservices API instances
 const dotnetAuthApi = createApiInstance(DOTNET_AUTH_URL);
 const dotnetStaffApi = createApiInstance(DOTNET_STAFF_URL);
+const dotnetClientApi = createApiInstance(DOTNET_CLIENT_URL);
 
 // Default API instance (switches based on environment)
 const api = USE_DOTNET_APIS ? dotnetAuthApi : djangoApi;
@@ -72,10 +74,12 @@ const addResponseInterceptor = (apiInstance: any) => {
 addAuthInterceptor(djangoApi);
 addAuthInterceptor(dotnetAuthApi);
 addAuthInterceptor(dotnetStaffApi);
+addAuthInterceptor(dotnetClientApi);
 
 addResponseInterceptor(djangoApi);
 addResponseInterceptor(dotnetAuthApi);
 addResponseInterceptor(dotnetStaffApi);
+addResponseInterceptor(dotnetClientApi);
 
 export default api;
-export { djangoApi, dotnetAuthApi, dotnetStaffApi, USE_DOTNET_APIS };
+export { djangoApi, dotnetAuthApi, dotnetStaffApi, dotnetClientApi, USE_DOTNET_APIS };

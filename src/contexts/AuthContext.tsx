@@ -9,7 +9,8 @@ interface User {
     email: string;
     first_name: string;
     last_name: string;
-    user_type: string;
+    user_type: string; // Primary role for backward compatibility
+    roles?: string[]; // Full roles array from .NET backend
     phone_number?: string;
     profile_picture?: string;
     is_active: boolean;

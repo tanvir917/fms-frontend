@@ -1,5 +1,13 @@
 import { dotnetStaffApi, dotnetAuthApi } from './api';
 
+// Import ApiResponse interface
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  errors?: string[];
+}
+
 // Updated interfaces to match .NET backend DTOs
 export interface StaffProfile {
   id: number;
@@ -170,6 +178,22 @@ export interface StaffStats {
   positionBreakdown: { [key: string]: number };
 }
 
+export interface StaffDocument {
+  id: number;
+  staffId: number;
+  title: string;
+  description?: string;
+  documentType: 'Identity' | 'WorkPermit' | 'Visa' | 'Nationality' | 'Background' | 'Medical' | 'Training' | 'Contract' | 'Other';
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  formattedFileSize: string;
+  uploadedAt: string;
+  uploadedBy: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface PaginatedResponse<T> {
   results: T[];
   count: number;
@@ -215,11 +239,30 @@ export const staffService = {
   },
 
   createStaffProfile: async (staffData: CreateStaffRequest): Promise<StaffProfile> => {
-    const response = await dotnetStaffApi.post('/staff', staffData);
-    if (response.data.success) {
-      return response.data.data;
-    } else {
-      throw new Error(response.data.message || 'Failed to create staff profile');
+    console.log('Creating staff profile with data:', staffData);
+    
+    try {
+      const response = await dotnetStaffApi.post('/staff', staffData);
+      if (response.data.success) {
+        console.log('Staff profile created successfully:', response.data.data);
+        return response.data.data;
+      } else {
+        console.error('Staff profile creation failed:', response.data);
+        throw new Error(response.data.message || 'Failed to create staff profile');
+      }
+    } catch (error: any) {
+      console.error('Staff profile creation error:', error);
+      if (error.response?.data) {
+        console.error('Error details:', error.response.data);
+        // Handle validation errors from .NET
+        if (error.response.data.errors) {
+          const validationErrors = Object.entries(error.response.data.errors)
+            .map(([field, messages]: [string, any]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join('; ');
+          throw new Error(`Validation errors: ${validationErrors}`);
+        }
+      }
+      throw error;
     }
   },
 
@@ -409,10 +452,23 @@ export const staffService = {
     lastName?: string;
     roles?: string[];
   }): Promise<User> => {
-    const response = await dotnetAuthApi.put(`/auth/users/${id}`, userData);
+    // Transform the data to match backend expectations
+    const backendData = {
+      username: userData.username || '',
+      email: userData.email || '',
+      firstName: userData.firstName || '',
+      lastName: userData.lastName || '',
+      role: userData.roles?.[0] || '' // Backend expects single role, not array
+    };
+    
+    console.log('Updating user with data:', backendData);
+    
+    const response = await dotnetAuthApi.put(`/auth/users/${id}`, backendData);
     if (response.data.success) {
+      console.log('User update successful:', response.data.data);
       return response.data.data;
     } else {
+      console.error('User update failed:', response.data.message);
       throw new Error(response.data.message || 'Failed to update user');
     }
   },
@@ -422,6 +478,50 @@ export const staffService = {
     if (!response.data.success) {
       throw new Error(response.data.message || 'Failed to delete user');
     }
+  },
+
+  adminChangePassword: async (userId: number, newPassword: string): Promise<void> => {
+    const response = await dotnetAuthApi.post(`/auth/users/${userId}/reset-password`, {
+      newPassword: newPassword
+    });
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to change password');
+    }
+  },
+
+  // Document operations
+  getStaffDocuments: async (staffId: number): Promise<StaffDocument[]> => {
+    const response = await dotnetStaffApi.get<ApiResponse<StaffDocument[]>>(`/staff/${staffId}/documents`);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to fetch staff documents');
+  },
+
+  uploadStaffDocument: async (staffId: number, documentData: FormData): Promise<StaffDocument> => {
+    const response = await dotnetStaffApi.post<ApiResponse<StaffDocument>>(`/staff/${staffId}/documents/upload`, documentData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.message || 'Failed to upload document');
+  },
+
+  deleteStaffDocument: async (staffId: number, documentId: number): Promise<void> => {
+    const response = await dotnetStaffApi.delete<ApiResponse<void>>(`/staff/${staffId}/documents/${documentId}`);
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Failed to delete document');
+    }
+  },
+
+  downloadStaffDocument: async (staffId: number, documentId: number): Promise<Blob> => {
+    const response = await dotnetStaffApi.get(`/staff/${staffId}/documents/${documentId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
   },
 };
 
