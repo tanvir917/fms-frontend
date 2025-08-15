@@ -41,14 +41,15 @@ const RoleBasedAccess: React.FC<RoleBasedAccessProps> = ({
 
     // Helper function to get user's privilege level
     const getUserPrivilegeLevel = (): number => {
-        if (userRoles.includes('Admin')) return 4;
+        // .NET backend roles
+        if (userRoles.includes('Administrator')) return 4;
         if (userRoles.includes('Manager')) return 3;
-        if (userRoles.includes('Care_Coordinator')) return 2;
+        if (userRoles.includes('Supervisor')) return 2;
         if (userRoles.includes('Staff')) return 1;
 
-        // Legacy role support
-        if (userRoles.includes('Administrator')) return 4;
-        if (userRoles.includes('Supervisor')) return 3;
+        // Legacy Django backend roles (for backward compatibility)
+        if (userRoles.includes('Admin')) return 4;
+        if (userRoles.includes('Care_Coordinator')) return 2;
         if (userRoles.includes('Carer')) return 1;
 
         return 1; // Default to basic staff level

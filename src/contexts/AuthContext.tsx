@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import api, { USE_DOTNET_APIS } from '../services/api'; // Use the centralized API instance
 import { dotNetAuthService } from '../services/dotnetApiService';
+import { getUserPrivilegeLevel, getUserRoleInfo } from '../utils/roleUtils';
 
 // Types
 interface User {
@@ -9,21 +10,30 @@ interface User {
     email: string;
     first_name: string;
     last_name: string;
-    user_type: string; // Primary role for backward compatibility
+    user_type?: string; // Optional for backward compatibility with Django
     roles?: string[]; // Full roles array from .NET backend
     phone_number?: string;
     profile_picture?: string;
     is_active: boolean;
+    is_staff?: boolean;
+    is_superuser?: boolean;
+    date_joined?: string;
+    groups?: string[];
 }
 
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    login: (username: string, password: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<void>;
     logout: () => void;
     register: (userData: RegisterData) => Promise<void>;
     updateProfile: (userData: Partial<User>) => Promise<void>;
     backendType: string; // Add backend type indicator
+
+    // Role-based access helpers
+    hasPrivilegeLevel: (level: number) => boolean;
+    canPerformAction: (action: string) => boolean;
+    getUserRole: () => { name: string; description: string; level: number };
 }
 
 interface RegisterData {
@@ -71,7 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLoading(false);
     }, []);
 
-    const login = async (username: string, password: string): Promise<void> => {
+    const login = async (email: string, password: string): Promise<void> => {
         try {
             console.log('Login attempt - Backend type:', USE_DOTNET_APIS ? '.NET Core' : 'Django');
             let response: AuthResponse;
@@ -79,12 +89,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (USE_DOTNET_APIS) {
                 console.log('Attempting .NET login to:', 'http://localhost:5001');
                 // Use .NET Authentication API
-                response = await dotNetAuthService.login(username, password);
+                response = await dotNetAuthService.login(email, password);
             } else {
                 console.log('Attempting Django login to:', api.defaults.baseURL);
                 // Use Django API
                 const apiResponse = await api.post<AuthResponse>('/auth/login/', {
-                    username,
+                    username: email, // Django still expects username field but we'll pass email
                     password,
                 });
                 response = apiResponse.data;
@@ -114,7 +124,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     ? 'Cannot connect to .NET authentication service. Please ensure it is running on port 5001.'
                     : 'Cannot connect to Django backend. Please ensure it is running on port 8000.';
             } else if (error.response?.status === 401) {
-                errorMessage = 'Invalid username or password';
+                errorMessage = 'Invalid email or password';
             } else if (error.response?.data?.message) {
                 errorMessage = error.response.data.message;
             } else if (error.message) {
@@ -142,7 +152,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 await dotNetAuthService.register(dotNetUserData);
                 // .NET register doesn't return tokens, so we need to login after
-                response = await dotNetAuthService.login(userData.username, userData.password);
+                response = await dotNetAuthService.login(userData.email, userData.password);
             } else {
                 // Use Django API
                 const apiResponse = await api.post<AuthResponse>('/auth/register/', userData);
@@ -208,7 +218,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout,
         updateProfile,
         loading,
-        backendType: USE_DOTNET_APIS ? '.NET Core' : 'Django'
+        backendType: USE_DOTNET_APIS ? '.NET Core' : 'Django',
+
+        // Role-based access helpers
+        hasPrivilegeLevel: (level: number) => getUserPrivilegeLevel(user) >= level,
+        canPerformAction: (action: string) => {
+            // This would use the centralized permission system
+            // For now, return basic permission check
+            return getUserPrivilegeLevel(user) >= 1;
+        },
+        getUserRole: () => getUserRoleInfo(user),
     };
 
     return (

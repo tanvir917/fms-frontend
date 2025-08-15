@@ -27,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PageLayout from '../../components/Layout/PageLayout';
 import RoleBasedAccess, { AdminOnly, ManagerOrAbove, CoordinatorOrAbove } from '../../components/Auth/RoleBasedAccess';
+import RoleDebugPanel from '../../components/Debug/RoleDebugPanel';
 import { clientService } from '../../services/clientService';
 import { rosterService } from '../../services/rosterService';
 import { staffService } from '../../services/staffService';
@@ -60,14 +61,16 @@ const DashboardPage: React.FC = () => {
 
         const userRoles = user.roles || [user.user_type];
 
-        if (userRoles.includes('Admin')) return 4;
+        // .NET backend roles
+        if (userRoles.includes('Administrator')) return 4;
         if (userRoles.includes('Manager')) return 3;
-        if (userRoles.includes('Care_Coordinator')) return 2;
+        if (userRoles.includes('Supervisor')) return 2;
         if (userRoles.includes('Staff')) return 1;
 
-        // Legacy role support
-        if (userRoles.includes('Administrator') || userRoles.includes('admin')) return 4;
-        if (userRoles.includes('Supervisor') || userRoles.includes('manager')) return 3;
+        // Legacy Django backend roles (for backward compatibility)
+        if (userRoles.includes('Admin')) return 4;
+        if (userRoles.includes('Care_Coordinator')) return 2;
+        if (userRoles.includes('Carer')) return 1;
 
         return 1; // Default to basic staff level
     };
@@ -255,6 +258,9 @@ const DashboardPage: React.FC = () => {
                         {user.roles?.[0] || user.user_type} Access Level
                     </Typography>
                 </Box>
+
+                {/* Role Debug Panel */}
+                <RoleDebugPanel />
 
                 {/* Quick Stats */}
                 <Box>

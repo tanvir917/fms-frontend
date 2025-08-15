@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { getUserPrivilegeLevel } from '../../utils/roleUtils';
 
 const Navbar: React.FC = () => {
     const navigate = useNavigate();
@@ -74,24 +75,7 @@ const Navbar: React.FC = () => {
     };
 
     // Helper function to get user's highest privilege level
-    const getUserPrivilegeLevel = (): number => {
-        if (!user) return 0;
-
-        const userRoles = user.roles || [user.user_type];
-
-        if (userRoles.includes('Admin')) return 4;
-        if (userRoles.includes('Manager')) return 3;
-        if (userRoles.includes('Care_Coordinator')) return 2;
-        if (userRoles.includes('Staff')) return 1;
-
-        // Legacy role support
-        if (userRoles.includes('Administrator')) return 4;
-        if (userRoles.includes('Supervisor')) return 3;
-
-        return 1; // Default to basic staff level
-    };
-
-    const privilegeLevel = getUserPrivilegeLevel();
+    const privilegeLevel = getUserPrivilegeLevel(user);
 
     const menuItems = [
         {
@@ -135,6 +119,13 @@ const Navbar: React.FC = () => {
             path: '/billing',
             minPrivilegeLevel: 3, // Manager and Admin only
             description: 'Handle billing and financial operations'
+        },
+        {
+            text: 'Role Test',
+            icon: <Dashboard />,
+            path: '/role-test',
+            minPrivilegeLevel: 1, // Available to all users for testing
+            description: 'Test role-based access control'
         },
     ];
 

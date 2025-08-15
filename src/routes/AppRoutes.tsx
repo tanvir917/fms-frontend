@@ -17,6 +17,7 @@ import ProfilePage from '../pages/profile/ProfilePage';
 import ApiDebug from '../components/Debug/ApiDebug';
 import StaffDetailPage from '../pages/staff/StaffDetailPage';
 import BackendTestPage from '../pages/BackendTestPage';
+import RoleTestPage from '../pages/RoleTestPage';
 
 // Protected Route wrapper
 interface ProtectedRouteProps {
@@ -168,6 +169,16 @@ const AppRoutes: React.FC = () => {
                 element={
                     <ProtectedRoute>
                         <BackendTestPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Role test route */}
+            <Route
+                path="/role-test"
+                element={
+                    <ProtectedRoute>
+                        <RoleTestPage />
                     </ProtectedRoute>
                 }
             />

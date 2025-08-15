@@ -12,25 +12,21 @@ interface ApiResponse<T> {
 // .NET User Types
 interface DotNetUser {
   id: number;
-  username: string;
   email: string;
   firstName: string;
   lastName: string;
+  fullName: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
   roles: string[];
 }
 
-interface DotNetLoginResponse {
-  token: string;
-  user: DotNetUser;
-}
-
 interface DotNetRegisterRequest {
-  username: string;
   email: string;
   password: string;
   firstName: string;
   lastName: string;
-  role: string;
 }
 
 // .NET Staff Types
@@ -72,13 +68,17 @@ interface PaginatedResponse<T> {
 // Type conversion utilities
 export const convertDotNetUserToFrontend = (dotNetUser: DotNetUser) => ({
   id: dotNetUser.id,
-  username: dotNetUser.username,
+  username: dotNetUser.email, // Use email as username since .NET doesn't have username field
   email: dotNetUser.email,
   first_name: dotNetUser.firstName,
   last_name: dotNetUser.lastName,
-  user_type: dotNetUser.roles[0] || 'Staff', // Keep for backward compatibility
-  roles: dotNetUser.roles, // Add full roles array
-  is_active: true,
+  is_active: dotNetUser.isActive,
+  is_staff: dotNetUser.roles.includes('Administrator') || dotNetUser.roles.includes('Manager') || dotNetUser.roles.includes('Supervisor'),
+  is_superuser: dotNetUser.roles.includes('Administrator'),
+  date_joined: dotNetUser.createdAt,
+  groups: dotNetUser.roles,
+  roles: dotNetUser.roles, // Full roles array for role-based access control
+  user_type: dotNetUser.roles[0] || 'Staff', // Primary role for backward compatibility
 });
 
 export const convertDotNetStaffToFrontend = (dotNetStaff: DotNetStaffMember) => ({
@@ -137,19 +137,52 @@ const mapDotNetPosition = (position: string): 'carer' | 'nurse' | 'supervisor' |
 
 // .NET Auth Service
 export const dotNetAuthService = {
-  async login(username: string, password: string) {
+  async login(email: string, password: string) {
     try {
-      const response = await dotnetAuthApi.post<ApiResponse<DotNetLoginResponse>>('/auth/login', {
-        username,
+      const response = await dotnetAuthApi.post<ApiResponse<{
+        accessToken: string;
+        refreshToken: string;
+        expiresAt: string;
+        user: {
+          id: number;
+          email: string;
+          firstName: string;
+          lastName: string;
+          fullName: string;
+          createdAt: string;
+          updatedAt: string;
+          isActive: boolean;
+          roles: string[];
+        };
+      }>>('/auth/login', {
+        email,
         password
       });
       
       if (response.data.success) {
+        const loginData = response.data.data!;
+        
+        // Convert the backend user to frontend format
+        const frontendUser = {
+          id: loginData.user.id,
+          username: loginData.user.email, // Use email as username
+          email: loginData.user.email,
+          first_name: loginData.user.firstName,
+          last_name: loginData.user.lastName,
+          is_active: loginData.user.isActive,
+          is_staff: loginData.user.roles.includes('Administrator') || loginData.user.roles.includes('Manager'),
+          is_superuser: loginData.user.roles.includes('Administrator'),
+          date_joined: loginData.user.createdAt,
+          groups: loginData.user.roles,
+          roles: loginData.user.roles, // Full roles array for role-based access control
+          user_type: loginData.user.roles[0] || 'Staff', // Primary role for backward compatibility
+        };
+        
         return {
-          user: convertDotNetUserToFrontend(response.data.data.user),
+          user: frontendUser,
           tokens: {
-            access: response.data.data.token,
-            refresh: response.data.data.token, // .NET doesn't have refresh tokens in current implementation
+            access: loginData.accessToken,
+            refresh: loginData.refreshToken,
           }
         };
       } else {
@@ -162,7 +195,7 @@ export const dotNetAuthService = {
       if (error.code === 'ECONNREFUSED') {
         throw new Error('Cannot connect to .NET authentication service. Is it running on port 5001?');
       } else if (error.response?.status === 401) {
-        throw new Error('Invalid username or password');
+        throw new Error('Invalid email or password');
       } else if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       } else if (error.message) {

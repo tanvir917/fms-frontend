@@ -51,10 +51,15 @@ const ClientsPage: React.FC = () => {
         }
 
         const rolePrivileges: { [key: string]: number } = {
-            'Admin': 4,
+            // .NET backend roles
+            'Administrator': 4,
             'Manager': 3,
+            'Supervisor': 2,
+            'Staff': 1,
+            // Legacy Django backend roles (for backward compatibility)
+            'Admin': 4,
             'Care_Coordinator': 2,
-            'Staff': 1
+            'Carer': 1
         };
 
         // Try to use roles array first, fallback to user_type

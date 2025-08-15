@@ -20,7 +20,7 @@ const LoginPage: React.FC = () => {
     const { login } = useAuth();
 
     const [formData, setFormData] = useState({
-        username: '',
+        email: '',
         password: '',
     });
     const [showPassword, setShowPassword] = useState(false);
@@ -41,7 +41,7 @@ const LoginPage: React.FC = () => {
         setError('');
 
         try {
-            await login(formData.username, formData.password);
+            await login(formData.email, formData.password);
             navigate('/dashboard');
         } catch (err: any) {
             setError(err.message || 'Login failed');
@@ -90,12 +90,13 @@ const LoginPage: React.FC = () => {
                                 margin="normal"
                                 required
                                 fullWidth
-                                id="username"
-                                label="Username"
-                                name="username"
-                                autoComplete="username"
+                                id="email"
+                                label="Email Address"
+                                name="email"
+                                type="email"
+                                autoComplete="email"
                                 autoFocus
-                                value={formData.username}
+                                value={formData.email}
                                 onChange={handleChange}
                             />
                             <TextField

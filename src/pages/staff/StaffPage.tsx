@@ -90,10 +90,15 @@ const StaffPage: React.FC = () => {
     }
 
     const rolePrivileges: { [key: string]: number } = {
-      'Admin': 4,
+      // .NET backend roles
+      'Administrator': 4,
       'Manager': 3,
+      'Supervisor': 2,
+      'Staff': 1,
+      // Legacy Django backend roles (for backward compatibility)
+      'Admin': 4,
       'Care_Coordinator': 2,
-      'Staff': 1
+      'Carer': 1
     };
 
     // Try to use roles array first, fallback to user_type
@@ -270,13 +275,35 @@ const StaffPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      console.log('Loading staff data...');
+
       const [staffData, usersData] = await Promise.all([
-        staffService.getStaffProfiles(),
-        staffService.getUsers().catch(() => ({ results: [] })),
+        staffService.getStaffProfiles().then(data => {
+          console.log('Staff profiles received:', data);
+          return data;
+        }).catch(err => {
+          console.error('Staff profiles error:', err);
+          throw err;
+        }),
+        staffService.getUsers().then(data => {
+          console.log('Users received:', data);
+          return data;
+        }).catch(err => {
+          console.error('Users error:', err);
+          console.log('Users error details:', err.response?.data);
+          return { results: [] }; // Fallback to empty results instead of failing
+        }),
       ]);
 
-      setStaffProfiles(Array.isArray(staffData) ? staffData : staffData.results || []);
-      setUsers(Array.isArray(usersData) ? usersData : usersData.results || []);
+      const staffProfiles = Array.isArray(staffData) ? staffData : staffData.results || [];
+      const users = Array.isArray(usersData) ? usersData : usersData.results || [];
+
+      console.log('Final staff profiles count:', staffProfiles.length);
+      console.log('Final users count:', users.length);
+      console.log('Users data structure:', users);
+
+      setStaffProfiles(staffProfiles);
+      setUsers(users);
     } catch (err: any) {
       console.error('Error loading staff data:', err);
       setError(err.response?.data?.message || 'Failed to load staff data');
@@ -859,7 +886,7 @@ const StaffPage: React.FC = () => {
               <Stack direction="row" alignItems="center" spacing={1}>
                 <AdminIcon color="secondary" />
                 <Box>
-                  <Typography variant="h6">{Array.isArray(users) ? users.filter(u => u.roles && (u.roles.includes('Carer') || u.roles.includes('Care_Coordinator'))).length : 0}</Typography>
+                  <Typography variant="h6">{Array.isArray(users) ? users.length : 0}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     System Users
                   </Typography>
@@ -1427,9 +1454,9 @@ const StaffPage: React.FC = () => {
                   value={userFormData.roles?.[0] || 'Staff'}
                   onChange={(e) => setUserFormData({ ...userFormData, roles: [e.target.value] })}
                 >
-                  <MenuItem value="Admin">Admin (Full System Access)</MenuItem>
+                  <MenuItem value="Administrator">Administrator (Full System Access)</MenuItem>
                   <MenuItem value="Manager">Manager (Staff & Operations)</MenuItem>
-                  <MenuItem value="Care_Coordinator">Care Coordinator (Client Management)</MenuItem>
+                  <MenuItem value="Supervisor">Supervisor (Oversight & Coordination)</MenuItem>
                   <MenuItem value="Staff">Staff (Basic Access)</MenuItem>
                 </Select>
               </FormControl>
